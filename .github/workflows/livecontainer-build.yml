@@ -112,10 +112,11 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import os
           replacements = {
-              "12377cf3b91d51739a33f14a302e5f522b238593": "${LIVE_CONTAINER_REF}",
-              "ff25922e5c13ccfafd83bda5092910d848ebd409": "${EMBEDDED_SIDESTORE_REF}",
-              "a731c0d5a9a6617c7b385ae493e07ffb7f81cd5d": "${SIDESIGN_REF}",
+              "12377cf3b91d51739a33f14a302e5f522b238593": os.environ["LIVE_CONTAINER_REF"],
+              "ff25922e5c13ccfafd83bda5092910d848ebd409": os.environ["EMBEDDED_SIDESTORE_REF"],
+              "a731c0d5a9a6617c7b385ae493e07ffb7f81cd5d": os.environ["SIDESIGN_REF"],
           }
           files = [
               "patch_app_layout.py",
