@@ -67,7 +67,11 @@ jobs:
 
           fetch_archive "LiveContainerMirror/LiveContainer" "$LIVE_CONTAINER_REF" "work/LiveContainer" "LiveContainer"
           fetch_archive "krzyzanowskim/OpenSSL" "623c84da314e85363236507ca38a4bde65df21c3" "work/LiveContainer/OpenSSL" "OpenSSL"
-          fetch_archive "LiveContainer/litehook" "a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9" "work/LiveContainer/litehook" "litehook"
+          # The 20260918 nightly points at litehook a7e9f59, which is no longer
+          # directly reachable from the public litehook archive endpoint. Use the
+          # maintained LiveContainer/litehook mainline so the 3.8.10 host source
+          # remains buildable while keeping the exact 4dbe0f9 host revision.
+          fetch_archive "LiveContainer/litehook" "main" "work/LiveContainer/litehook" "litehook"
           fetch_archive "SideStore/SideStore" "$EMBEDDED_SIDESTORE_REF" "work/EmbeddedSideStore" "EmbeddedSideStore"
           fetch_archive "SideStore/minimuxer" "$MINIMUXER_REF" "work/EmbeddedSideStore/Dependencies/minimuxer" "minimuxer"
           fetch_archive "SideStore/SideSign" "$SIDESIGN_REF" "work/EmbeddedSideStore/Dependencies/SideSign" "SideSign"
@@ -98,7 +102,7 @@ jobs:
           set -euo pipefail
           test "$(cat work/LiveContainer/.upstream-commit)" = "$LIVE_CONTAINER_REF"
           test "$(cat work/LiveContainer/OpenSSL/.upstream-commit)" = "623c84da314e85363236507ca38a4bde65df21c3"
-          test "$(cat work/LiveContainer/litehook/.upstream-commit)" = "a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9"
+          test "$(cat work/LiveContainer/litehook/.upstream-commit)" = "main"
           test "$(cat work/EmbeddedSideStore/.upstream-commit)" = "$EMBEDDED_SIDESTORE_REF"
           test "$(cat work/EmbeddedSideStore/Dependencies/minimuxer/.upstream-commit)" = "$MINIMUXER_REF"
           test "$(cat work/EmbeddedSideStore/Dependencies/SideSign/.upstream-commit)" = "$SIDESIGN_REF"
