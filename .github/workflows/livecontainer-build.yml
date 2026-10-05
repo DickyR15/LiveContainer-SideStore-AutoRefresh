@@ -181,7 +181,7 @@ jobs:
           cat > "$RUNNER_TEMP/autorefresh-bin/git" <<'SHIM'
 #!/bin/bash
 set -e
-REAL_GIT="$(type -P git)"
+REAL_GIT="/usr/bin/git"
 args=("$@")
 cwd=""
 for ((i=0;i<${#args[@]};i++)); do
@@ -239,22 +239,13 @@ SHIM
           set -euo pipefail
           {
             python3 builder/scripts/patch_livecontainer_autorefresh.py work/LiveContainer
-            python3 builder/scripts/patch_livecontainer_autorefresh.py work/LiveContainer
-            python3 builder/scripts/patch_embedded_sidestore_startup.py work/LiveContainer work/EmbeddedSideStore
             python3 builder/scripts/patch_embedded_sidestore_startup.py work/LiveContainer work/EmbeddedSideStore
             python3 builder/scripts/patch_guest_return.py work/LiveContainer
-            python3 builder/scripts/patch_guest_return.py work/LiveContainer
-            python3 builder/scripts/patch_dead10cc_fix.py work/LiveContainer
             python3 builder/scripts/patch_dead10cc_fix.py work/LiveContainer
             python3 builder/scripts/patch_multitask_dock.py work/LiveContainer
-            python3 builder/scripts/patch_multitask_dock.py work/LiveContainer
-            python3 builder/scripts/patch_app_layout.py --v3-grid work/LiveContainer
             python3 builder/scripts/patch_app_layout.py --v3-grid work/LiveContainer
             python3 builder/scripts/patch_v3_unified_shell.py work/LiveContainer work/EmbeddedSideStore
-            python3 builder/scripts/patch_v3_unified_shell.py work/LiveContainer work/EmbeddedSideStore
             python3 builder/scripts/patch_lc_certificate_observation.py work/LiveContainer
-            python3 builder/scripts/patch_lc_certificate_observation.py work/LiveContainer
-            python3 builder/scripts/patch_v3_service.py work/LiveContainer work/EmbeddedSideStore
             python3 builder/scripts/patch_v3_service.py work/LiveContainer work/EmbeddedSideStore
             swiftc -frontend -parse work/LiveContainer/MultitaskSupport/MultitaskAppWindow.swift
             swiftc -frontend -parse work/LiveContainer/MultitaskSupport/MultitaskDockView.swift
@@ -272,7 +263,6 @@ SHIM
           module.patch_console_log(Path("work/EmbeddedSideStore"))
           PY
             python3 builder/scripts/patch_combined_refresh_contract.py work/EmbeddedSideStore
-            python3 builder/scripts/patch_combined_refresh_contract.py work/EmbeddedSideStore
             # The shared-Keychain contract completes SignInOperation here.
             # Verify both pinned transforms before combined startup appends
             # its separate backend overlay to SideStore's AppDelegate.
@@ -280,7 +270,6 @@ SHIM
               work/EmbeddedSideStore "$EMBEDDED_SIDESTORE_REF"
             python3 builder/scripts/patch_v3_service.py --verify-sign-in-operation \
               work/EmbeddedSideStore "$EMBEDDED_SIDESTORE_REF"
-            python3 builder/scripts/patch_combined_service_startup.py work/LiveContainer work/EmbeddedSideStore v3
             python3 builder/scripts/patch_combined_service_startup.py work/LiveContainer work/EmbeddedSideStore v3
             swiftc -frontend -parse work/LiveContainer/LiveContainerSwiftUI/App/AppDelegate.swift
             swiftc -frontend -parse work/LiveContainer/LiveContainerSwiftUI/App/LiveContainerAutoRefreshAlarm.swift
@@ -405,7 +394,6 @@ SHIM
           cmp "$RUNNER_TEMP/combined-transport-first.diff" "$RUNNER_TEMP/combined-transport-second.diff"
           cmp "$RUNNER_TEMP/combined-swift-first.txt" "$RUNNER_TEMP/combined-swift-second.txt"
           python3 builder/scripts/patch_combined_service_startup.py --transport "$MUX"
-          python3 builder/scripts/patch_combined_service_startup.py --transport "$MUX"
           git -C "$MUX" diff --check
           while IFS= read -r -d '' source; do swiftc -frontend -parse "$source"; done < <(find "$MUX" -type f -name '*.swift' -not -path '*/.build/*' -print0)
           swift package --package-path "$MUX/DeviceGateway" dump-package >"$RUNNER_TEMP/combined-gateway-package.json"
@@ -423,10 +411,7 @@ SHIM
           SIDESIGN=work/EmbeddedSideStore/Dependencies/SideSign
           SIDESTORE=work/EmbeddedSideStore
           python3 builder/scripts/patch_sidesign_privacy.py "$SIDESIGN" "$SIDESTORE"
-          python3 builder/scripts/patch_sidesign_privacy.py "$SIDESIGN" "$SIDESTORE"
           python3 builder/scripts/patch_sidesign_2fa_state.py "$SIDESIGN"
-          python3 builder/scripts/patch_sidesign_2fa_state.py "$SIDESIGN"
-          python3 builder/scripts/patch_combined_service_startup.py --portal "$SIDESIGN"
           python3 builder/scripts/patch_combined_service_startup.py --portal "$SIDESIGN"
           git -C "$SIDESIGN" diff --check
           expected_sidesign=$(printf '%s\n' \
