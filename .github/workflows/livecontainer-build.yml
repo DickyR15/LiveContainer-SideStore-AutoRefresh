@@ -44,12 +44,21 @@ jobs:
           ref: ${{ env.LIVE_CONTAINER_REF }}
           path: work/LiveContainer
           fetch-depth: 1
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize pinned LiveContainer submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C work/LiveContainer config -f .gitmodules submodule.litehook.url https://github.com/opa334/litehook.git
+          git -C work/LiveContainer submodule sync --recursive
+          git -C work/LiveContainer submodule update --init --recursive --depth=1
+          test "$(git -C work/LiveContainer/litehook rev-parse HEAD)" = a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9
 
       - name: Checkout pinned embedded SideStore sources
         uses: actions/checkout@v4
         with:
-          repository: LiveContainer/SideStore
+          repository: LiveContainerMirror/SideStore
           ref: ${{ env.EMBEDDED_SIDESTORE_REF }}
           path: work/EmbeddedSideStore
           fetch-depth: 1
