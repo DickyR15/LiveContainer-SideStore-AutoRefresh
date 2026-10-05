@@ -140,6 +140,29 @@ jobs:
           elif new_anchor not in service_text:
               raise SystemExit("expected AuthManager session-clear anchor is missing")
           service.write_text(service_text, encoding="utf-8")
+          # Newer SideStore revisions removed the AppManager sign-in/deactivate
+          # UI wrappers upstream. Treat that as an already-headless boundary.
+          service_text = service.read_text(encoding="utf-8")
+          marker_block = (
+              "def headless_app_manager_ui(text):",
+              "    text = headless_app_manager_persisted_error_privacy(text)",
+              "    marker = \"V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1\"",
+          )
+          compat_anchor = "    start_marker = \"    func signIn(presentingViewController: UIViewController?,\\n\""
+          compat_code = """    if (
+        \"func signIn(presentingViewController: UIViewController?,\" not in text and
+        \"func deactivateApps(for appBundle: ALTApplication\" not in text
+    ):
+        if marker not in text:
+            text += \"\\n    // V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1: upstream AppManager no longer owns sign-in.\\n\"
+            text += \"    // V3_TYPED_PAIRING_FAILURE_PROPAGATION_V1: current AppManager has no legacy sign-in UI wrapper.\\n\"
+        return text
+"""
+
+          if compat_anchor not in service_text:
+              raise SystemExit("AppManager compatibility anchor not found in v3 service patch")
+          service_text = service_text.replace(compat_anchor, compat_code + compat_anchor, 1)
+          service.write_text(service_text, encoding="utf-8")
           for name in files:
               path = root / name
               text = path.read_text(encoding="utf-8")
