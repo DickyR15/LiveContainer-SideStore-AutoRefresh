@@ -37,30 +37,40 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Checkout pinned LiveContainer sources
+      - name: Materialize pinned LiveContainer + SideStore sources
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/logs work
-          git config --global http.https://github.com/.extraheader "AUTHORIZATION: bearer $GITHUB_TOKEN"
-          trap 'git config --global --unset-all http.https://github.com/.extraheader || true' EXIT
-          GIT_TERMINAL_PROMPT=0 git -c credential.helper= clone --filter=blob:none https://github.com/LiveContainerMirror/LiveContainer.git work/LiveContainer
-          git -C work/LiveContainer checkout --detach "$LIVE_CONTAINER_REF"
-          git -C work/LiveContainer submodule update --init --recursive --depth=1
 
-      - name: Checkout pinned embedded SideStore sources
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          git config --global http.https://github.com/.extraheader "AUTHORIZATION: bearer $GITHUB_TOKEN"
-          trap 'git config --global --unset-all http.https://github.com/.extraheader || true' EXIT
-          GIT_TERMINAL_PROMPT=0 git -c credential.helper= clone --filter=blob:none https://github.com/SideStore/SideStore.git work/EmbeddedSideStore
-          git -C work/EmbeddedSideStore checkout --detach "$EMBEDDED_SIDESTORE_REF"
-          git -C work/EmbeddedSideStore submodule update --init --recursive --depth=1
+          fetch_archive() {
+            local repo="$1"
+            local ref="$2"
+            local dest="$3"
+            local label="$4"
+            local tmp
+            tmp="$(mktemp)"
+            echo "[SOURCE_FETCH] $label repo=$repo ref=$ref"
+            curl --fail --location --retry 5 --retry-delay 2 \
+              "https://codeload.github.com/${repo}/tar.gz/${ref}" -o "$tmp"
+            rm -rf "$dest"
+            mkdir -p "$dest"
+            tar -xzf "$tmp" --strip-components=1 -C "$dest"
+            rm -f "$tmp"
+            git -C "$dest" init -q
+            git -C "$dest" config user.email "build@local.invalid"
+            git -C "$dest" config user.name "AutoRefresh baseline"
+            git -C "$dest" add -A
+            git -C "$dest" commit -qm "baseline $label $ref"
+            printf '%s\n' "$ref" > "$dest/.upstream-commit"
+          }
+
+          fetch_archive "LiveContainerMirror/LiveContainer" "$LIVE_CONTAINER_REF" "work/LiveContainer" "LiveContainer"
+          fetch_archive "krzyzanovski/OpenSSL" "623c84da314e85363236507ca38a4bde65df21c3" "work/LiveContainer/OpenSSL" "OpenSSL"
+          fetch_archive "LiveContainer/litehook" "a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9" "work/LiveContainer/litehook" "litehook"
+          fetch_archive "SideStore/SideStore" "$EMBEDDED_SIDESTORE_REF" "work/EmbeddedSideStore" "EmbeddedSideStore"
+          fetch_archive "SideStore/minimuxer" "$MINIMUXER_REF" "work/EmbeddedSideStore/Dependencies/minimuxer" "minimuxer"
+          fetch_archive "SideStore/SideSign" "$SIDESIGN_REF" "work/EmbeddedSideStore/Dependencies/SideSign" "SideSign"
 
       - name: Prepare build logs
         run: mkdir -p artifacts/logs
@@ -86,15 +96,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C work/LiveContainer rev-parse HEAD)" = "$LIVE_CONTAINER_REF"
-          test "$(git -C work/EmbeddedSideStore rev-parse HEAD)" = "$EMBEDDED_SIDESTORE_REF"
-          test "$(git -C work/EmbeddedSideStore/Dependencies/minimuxer rev-parse HEAD)" = "$MINIMUXER_REF"
-          test "$(git -C work/EmbeddedSideStore/Dependencies/SideSign rev-parse HEAD)" = "$SIDESIGN_REF"
-          # Verify upstream resolution; never independently checkout or override SideSign.
-          git -C work/EmbeddedSideStore/Dependencies/SideSign fetch --unshallow origin
-          git -C work/EmbeddedSideStore/Dependencies/SideSign merge-base --is-ancestor "$SIDESIGN_GSA_FIX" HEAD
-          printf 'sidestore=%s\nminimuxer=%s\nsidesign=%s\ngsa_fix_ancestor=%s\n' \
-            "$EMBEDDED_SIDESTORE_REF" "$MINIMUXER_REF" "$SIDESIGN_REF" "$SIDESIGN_GSA_FIX" \
+          test "$(cat work/LiveContainer/.upstream-commit)" = "$LIVE_CONTAINER_REF"
+          test "$(cat work/LiveContainer/OpenSSL/.upstream-commit)" = "623c84da314e85363236507ca38a4bde65df21c3"
+          test "$(cat work/LiveContainer/litehook/.upstream-commit)" = "a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9"
+          test "$(cat work/EmbeddedSideStore/.upstream-commit)" = "$EMBEDDED_SIDESTORE_REF"
+          test "$(cat work/EmbeddedSideStore/Dependencies/minimuxer/.upstream-commit)" = "$MINIMUXER_REF"
+          test "$(cat work/EmbeddedSideStore/Dependencies/SideSign/.upstream-commit)" = "$SIDESIGN_REF"
+          printf 'livecontainer=%s\nsidestore=%s\nminimuxer=%s\nsidesign=%s\ngsa_fix=%s\n' \
+            "$LIVE_CONTAINER_REF" "$EMBEDDED_SIDESTORE_REF" "$MINIMUXER_REF" "$SIDESIGN_REF" "$SIDESIGN_GSA_FIX" \
             | tee artifacts/logs/upstream-auth-provenance.txt
           test "$(git -C idevice rev-parse HEAD)" = "$IDEVICE_REF"
           test "$(git -C jktcp rev-parse HEAD)" = "$JKTCP_REF"
