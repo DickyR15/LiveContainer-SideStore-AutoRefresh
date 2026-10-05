@@ -44,7 +44,7 @@ jobs:
           mkdir -p artifacts/logs work
           GIT_TERMINAL_PROMPT=0 git -c credential.helper= clone --filter=blob:none https://github.com/LiveContainerMirror/LiveContainer.git work/LiveContainer
           git -C work/LiveContainer checkout --detach "$LIVE_CONTAINER_REF"
-          git -C work/LiveContainer submodule update --init --recursive --depth=1
+          git -C work/LiveContainer -c credential.helper= submodule update --init --recursive --depth=1
 
       - name: Checkout pinned embedded SideStore sources
         shell: bash
@@ -52,7 +52,7 @@ jobs:
           set -euo pipefail
           GIT_TERMINAL_PROMPT=0 git -c credential.helper= clone --filter=blob:none https://github.com/SideStore/SideStore.git work/EmbeddedSideStore
           git -C work/EmbeddedSideStore checkout --detach "$EMBEDDED_SIDESTORE_REF"
-          git -C work/EmbeddedSideStore submodule update --init --recursive --depth=1
+          git -C work/EmbeddedSideStore -c credential.helper= submodule update --init --recursive --depth=1
 
       - name: Prepare build logs
         run: mkdir -p artifacts/logs
