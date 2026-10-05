@@ -28,7 +28,7 @@ jobs:
           mkdir -p artifacts
           echo "run=$GITHUB_RUN_NUMBER" > artifacts/build-info.txt
 
-      - name: Download verified Unified v3.1.0 IPA
+      - name: Download verified LiveContainer nightly 20260918 IPA
         shell: bash
         run: |
           set -euo pipefail
