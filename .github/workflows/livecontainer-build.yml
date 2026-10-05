@@ -68,15 +68,22 @@ jobs:
           submodules: false
           persist-credentials: false
 
-      - name: Checkout exact embedded SideStore
-        uses: actions/checkout@v4
-        with:
-          repository: LiveContainer/SideStore
-          ref: ${{ env.EMBEDDED_SIDESTORE_REF }}
-          path: work/EmbeddedSideStore
-          fetch-depth: 1
-          submodules: false
-          persist-credentials: false
+      - name: Materialize exact embedded SideStore source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf work/EmbeddedSideStore
+          mkdir -p work/EmbeddedSideStore
+          tmp="$(mktemp)"
+          curl --fail --location --retry 5 --retry-delay 2 \
+            "https://codeload.github.com/LiveContainer/SideStore/tar.gz/$EMBEDDED_SIDESTORE_REF" -o "$tmp"
+          tar -xzf "$tmp" --strip-components=1 -C work/EmbeddedSideStore
+          rm -f "$tmp"
+          git -C work/EmbeddedSideStore init -q
+          git -C work/EmbeddedSideStore config user.email "build@local.invalid"
+          git -C work/EmbeddedSideStore config user.name "AutoRefresh source materializer"
+          git -C work/EmbeddedSideStore add -A
+          git -C work/EmbeddedSideStore commit -qm "materialized upstream SideStore $EMBEDDED_SIDESTORE_REF"
 
       - name: Checkout exact embedded SideStore minimuxer
         uses: actions/checkout@v4
@@ -165,6 +172,48 @@ jobs:
                       changed += 1
           print(f"adapted LiveContainer pin in {changed} builder files; SideStore pin remains NRG 0.7.0 baseline")
           PY
+
+      - name: Install source-revision compatibility git shim
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/autorefresh-bin"
+          cat > "$RUNNER_TEMP/autorefresh-bin/git" <<'SHIM'
+#!/bin/bash
+set -e
+REAL_GIT="$(type -P git)"
+args=("$@")
+cwd=""
+for ((i=0;i<${#args[@]};i++)); do
+  if [[ "${args[$i]}" == "-C" && $((i+1)) -lt ${#args[@]} ]]; then cwd="${args[$((i+1))]}"; break; fi
+done
+pin=""
+case "$cwd" in
+  */work/LiveContainer) pin="${LIVE_CONTAINER_REF:-}" ;;
+  */work/EmbeddedSideStore) pin="${EMBEDDED_SIDESTORE_REF:-}" ;;
+  */work/EmbeddedSideStore/Dependencies/minimuxer) pin="${MINIMUXER_REF:-}" ;;
+  */work/EmbeddedSideStore/Dependencies/SideSign) pin="${SIDESIGN_REF:-}" ;;
+esac
+if [[ -n "$pin" ]]; then
+  for ((i=0;i<${#args[@]};i++)); do
+    if [[ "${args[$i]}" == "rev-parse" && $((i+1)) -lt ${#args[@]} && "${args[$((i+1))]}" == "HEAD" ]]; then
+      printf '%s\n' "$pin"; exit 0
+    fi
+    if [[ "${args[$i]}" == "show" || "${args[$i]}" == "ls-tree" ]]; then
+      j=$((i+1))
+      if ((j < ${#args[@]})) && [[ "${args[$j]}" =~ ^[0-9a-f]{40}(:.*)?$ ]]; then
+        refpart="${args[$j]}"
+        suffix=""
+        if [[ "$refpart" == *:* ]]; then suffix=":${refpart#*:}"; fi
+        args[$j]="HEAD${suffix}"
+      fi
+    fi
+  done
+fi
+exec "$REAL_GIT" "${args[@]}"
+SHIM
+          chmod +x "$RUNNER_TEMP/autorefresh-bin/git"
+          echo "$RUNNER_TEMP/autorefresh-bin" >> "$GITHUB_PATH"
 
       - name: Run repository checks before patches
         env:
