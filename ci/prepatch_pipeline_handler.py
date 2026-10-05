@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Pre-adapt newer SideStore PipelineHandler before the legacy v3 builder runs."""
 from __future__ import annotations
-
 from pathlib import Path
 import re
 import sys
@@ -31,9 +30,6 @@ def main() -> None:
     path = root / "SideStore/Handlers/PipelineHandler.swift"
     text = path.read_text(encoding="utf-8")
 
-    if MARKER in text:
-        return
-
     presenter_re = re.compile(
         r"(?ms)^    let isResignActive: Bool\s*\n"
         r"^\s*private let presenterProvider: PresenterProvider\?\s*\n"
@@ -50,10 +46,9 @@ def main() -> None:
         r"^\s*private var activePresenter: UIViewController\?\s*\{.*?\n\s*\}\s*\n"
     )
     text, count = presenter_re.subn(
-        "    let isResignActive = false\n\n"
+        "    let isResignActive = false\n\n" +
         f"    // {MARKER}: presenter state is never retained in the embedded service.\n",
-        text,
-        count=1,
+        text, count=1
     )
     if count != 1:
         raise SystemExit(f"pipeline prepatch: presenter block not found uniquely ({count})")
@@ -61,133 +56,91 @@ def main() -> None:
     replacements = [
         (
             "    func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String) async -> Bool",
-            f'''    func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String) async -> Bool {{
-    // {DECISIONS}: no UI context means fail closed.
-    return false
-}}''',
+            f"    func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String) async -> Bool {{\n    // {DECISIONS}: no UI context means fail closed.\n    return false\n}}",
         ),
         (
             "    func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode) async throws",
-            f'''    func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode) async throws {{
-    // {DECISIONS}: permission review cannot be approved headlessly.
-    throw OperationError.invalidOperationContext("PipelineHandler: Cannot review permissions because presenting view controller is unavailable")
-}}''',
+            f"    func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode) async throws {{\n    // {DECISIONS}: permission review cannot be approved headlessly.\n    throw OperationError.invalidOperationContext(\"PipelineHandler: Cannot review permissions because presenting view controller is unavailable\")\n}}",
         ),
         (
             "    func selectAppExtensionsToRemove(",
-            f'''    func selectAppExtensionsToRemove(
-        appBundle: ALTApplication,
-        localAppExtensions: [ALTApplication],
-        excessExtensions: Set<ALTApplication>
-    ) async throws -> ExtensionRemovalDecision {{
-    // {DECISIONS}: keep all extensions without the review UI.
-    return .keepAll(useMainProfile: false)
-}}''',
+            f"    func selectAppExtensionsToRemove(\n        appBundle: ALTApplication,\n        localAppExtensions: [ALTApplication],\n        excessExtensions: Set<ALTApplication>\n    ) async throws -> ExtensionRemovalDecision {{\n    // {DECISIONS}: keep all extensions without the review UI.\n    return .keepAll(useMainProfile: false)\n}}",
         ),
         (
             "    func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String) async throws -> Bool",
-            f'''    func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String) async throws -> Bool {{
-    // {DECISIONS}: do not download an unrequested compatibility version.
-    return false
-}}''',
+            f"    func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String) async throws -> Bool {{\n    // {DECISIONS}: do not download an unrequested compatibility version.\n    return false\n}}",
         ),
         (
             "    func requestBackgroundSuspension() async",
-            f'''    func requestBackgroundSuspension() async {{
-    // {DECISIONS}: background suspension is host-owned.
-}}''',
+            f"    func requestBackgroundSuspension() async {{\n    // {DECISIONS}: background suspension is host-owned.\n}}",
         ),
         (
             "    func resolveBundleIDOverride(initialBundleID: String) async throws -> (customID: String, appendTeamID: Bool)?",
-            f'''    func resolveBundleIDOverride(initialBundleID: String) async throws -> (customID: String, appendTeamID: Bool)? {{
-    // {MARKER}: the combined host owns the interactive prompt.
-    return (initialBundleID, true)
-}}''',
+            f"    func resolveBundleIDOverride(initialBundleID: String) async throws -> (customID: String, appendTeamID: Bool)? {{\n    // {MARKER}: the combined host owns the interactive prompt.\n    return (initialBundleID, true)\n}}",
         ),
         (
             "    func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String) async throws -> AppGroupResolution",
-            f'''    func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String) async throws -> AppGroupResolution {{
-    // {DECISIONS}: preserve the validated corrected group without UI.
-    return .correctAndProceed(correctedGroup)
-}}''',
+            f"    func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String) async throws -> AppGroupResolution {{\n    // {DECISIONS}: preserve the validated corrected group without UI.\n    return .correctAndProceed(correctedGroup)\n}}",
+        ),
     ]
     for signature, replacement in replacements:
         text = replace_function(text, signature, replacement)
 
-    info_target_sig = "    func resolveInfoPlistCustomization(\n        targets: [InfoPlistTarget],"
-    info_single_sig = "    func resolveInfoPlistCustomization(\n        initialPlist: [String: any Sendable],"
-    ent_target_sig = "    func resolveEntitlementsCustomization(\n        targets: [EntitlementsTarget],"
-    ent_single_sig = "    func resolveEntitlementsCustomization(\n        initialEntitlements: [String: any Sendable],"
+    info_target = "    func resolveInfoPlistCustomization(\n        targets: [InfoPlistTarget],"
+    info_single = "    func resolveInfoPlistCustomization(\n        initialPlist: [String: any Sendable],"
+    ent_target = "    func resolveEntitlementsCustomization(\n        targets: [EntitlementsTarget],"
+    ent_single = "    func resolveEntitlementsCustomization(\n        initialEntitlements: [String: any Sendable],"
 
-    text = replace_function(
-        text,
-        info_target_sig,
-        '''    func resolveInfoPlistCustomization(
-        targets: [InfoPlistTarget],
-        initialBundleID: String,
-        appendTeamID: Bool,
-        installedAppIdentities: [String: String],
-        teamID: String
-    ) async throws -> (modifiedPlists: [String: [String: any Sendable]], appendTeamID: Bool)? {
-        var result: [String: [String: any Sendable]] = [:]
-        for target in targets {
-            result[target.id] = target.initialPlist
-        }
-        return (result, appendTeamID)
-    }''',
+    text = replace_function(text, info_target,
+        "    func resolveInfoPlistCustomization(\n"
+        "        targets: [InfoPlistTarget],\n"
+        "        initialBundleID: String,\n"
+        "        appendTeamID: Bool,\n"
+        "        installedAppIdentities: [String: String],\n"
+        "        teamID: String\n"
+        "    ) async throws -> (modifiedPlists: [String: [String: any Sendable]], appendTeamID: Bool)? {\n"
+        "        var result: [String: [String: any Sendable]] = [:]\n"
+        "        for target in targets { result[target.id] = target.initialPlist }\n"
+        "        return (result, appendTeamID)\n"
+        "    }"
     )
-    text = replace_function(
-        text,
-        info_single_sig,
-        '''    func resolveInfoPlistCustomization(
-        initialPlist: [String: any Sendable],
-        initialBundleID: String,
-        appendTeamID: Bool,
-        installedAppIdentities: [String: String],
-        teamID: String
-    ) async throws -> (modifiedPlist: [String: any Sendable], appendTeamID: Bool)? {
-        return (initialPlist, appendTeamID)
-    }''',
+    text = replace_function(text, info_single,
+        "    func resolveInfoPlistCustomization(\n"
+        "        initialPlist: [String: any Sendable],\n"
+        "        initialBundleID: String,\n"
+        "        appendTeamID: Bool,\n"
+        "        installedAppIdentities: [String: String],\n"
+        "        teamID: String\n"
+        "    ) async throws -> (modifiedPlist: [String: any Sendable], appendTeamID: Bool)? {\n"
+        "        return (initialPlist, appendTeamID)\n"
+        "    }"
     )
-    text = replace_function(
-        text,
-        ent_target_sig,
-        '''    func resolveEntitlementsCustomization(
-        targets: [EntitlementsTarget],
-        teamType: ALTTeamType
-    ) async throws -> [String: [String: any Sendable]]? {
-        var result: [String: [String: any Sendable]] = [:]
-        for target in targets {
-            result[target.id] = target.initialEntitlements
-        }
-        return result
-    }''',
+    text = replace_function(text, ent_target,
+        "    func resolveEntitlementsCustomization(\n"
+        "        targets: [EntitlementsTarget],\n"
+        "        teamType: ALTTeamType\n"
+        "    ) async throws -> [String: [String: any Sendable]]? {\n"
+        "        var result: [String: [String: any Sendable]] = [:]\n"
+        "        for target in targets { result[target.id] = target.initialEntitlements }\n"
+        "        return result\n"
+        "    }"
     )
-    text = replace_function(
-        text,
-        ent_single_sig,
-        '''    func resolveEntitlementsCustomization(
-        initialEntitlements: [String: any Sendable],
-        bundleID: String,
-        teamType: ALTTeamType
-    ) async throws -> [String: any Sendable]? {
-        return initialEntitlements
-    }''',
+    text = replace_function(text, ent_single,
+        "    func resolveEntitlementsCustomization(\n"
+        "        initialEntitlements: [String: any Sendable],\n"
+        "        bundleID: String,\n"
+        "        teamType: ALTTeamType\n"
+        "    ) async throws -> [String: any Sendable]? {\n"
+        "        return initialEntitlements\n"
+        "    }"
     )
 
     forbidden = (
-        "presenterProvider",
-        "activePresenter",
-        "isPresenterAvailable",
-        "isResignActive:",
-        "UIAlertController",
-        "ReviewPermissionsViewController",
-        "AppExtensionViewHostingController",
-        "presentingViewController",
-        "InfoPlistCustomizationSheetView",
-        "InfoPlistCustomizationView",
-        "EntitlementsCustomizationSheetView",
-        "EntitlementsCustomizationView",
+        "presenterProvider", "activePresenter", "isPresenterAvailable",
+        "isResignActive:", "UIAlertController", "ReviewPermissionsViewController",
+        "AppExtensionViewHostingController", "presentingViewController",
+        "InfoPlistCustomizationSheetView", "InfoPlistCustomizationView",
+        "EntitlementsCustomizationSheetView", "EntitlementsCustomizationView",
     )
     remaining = [item for item in forbidden if item in text]
     if remaining:
