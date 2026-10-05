@@ -140,12 +140,15 @@ def main() -> None:
     # Newer SideStore adds three more presenter-backed customization methods at the
     # tail of PipelineHandler. Keep protocol-compatible headless defaults and drop
     # the private image-picker helper, which is only used by that UI path.
-    tail_start = "\n    @MainActor\n    func resolveAppGroupMismatch("
-    tail_end = "\n}\n\nprivate final class ImagePickerDelegateHandler"
-    if tail_start not in text or tail_end not in text:
-        raise SystemExit("pipeline prepatch: newer customization tail layout changed")
+    tail_start = "\n    @MainActor\n    func resolveAppGroupMismatch(";
+    tail_end_marker = "\n}";
+    if tail_start not in text:
+        raise SystemExit("pipeline prepatch: AppGroup customization tail anchor changed")
     start = text.index(tail_start)
-    end = text.index(tail_end, start)
+    end = text.find(tail_end_marker, start)
+    if end < 0:
+        raise SystemExit("pipeline prepatch: PipelineHandler class closing brace not found")
+
     tail_replacement = (
         "\n    @MainActor\n"
         "    func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String) async throws -> AppGroupResolution {\n"
