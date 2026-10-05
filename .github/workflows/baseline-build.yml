@@ -1,4 +1,4 @@
-name: Build Unified v3.1.0 baseline
+name: Build LiveContainer Nightly 20260918 baseline
 
 on:
   workflow_dispatch:
@@ -9,13 +9,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: unified-v3.1.0-baseline-${{ github.ref }}
+  group: livecontainer-nightly-20260918-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  RELEASE_URL: https://github.com/NRG-Wardog/sidestore-auto-refresh/releases/download/v3.1.0/LiveContainer-SideStore-v3.1.0.ipa
-  EXPECTED_SHA256: 2337e08a71b2af4fee930b59ccd28522563acd81e908069e56f6d27d1636daf4
-  BASELINE_RELEASE: v3.1.0
+  RELEASE_URL: https://github.com/LiveContainerMirror/LiveContainer/releases/download/nightly/LiveContainer%2BSideStore.ipa
+  EXPECTED_SHA256: bec41bc21d75a0f2e85a0aa589ce5772e24e410deb017486758a3bc0503c8de7
+  BASELINE_RELEASE: nightly-20260918
 
 jobs:
   baseline:
@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          FILE="artifacts/LiveContainer-SideStore-AutoRefresh-v3.1.0-build${GITHUB_RUN_NUMBER}.ipa"
+          FILE="artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${GITHUB_RUN_NUMBER}.ipa"
           curl --fail --location --retry 5 --retry-delay 2 "$RELEASE_URL" --output "$FILE"
           echo "${EXPECTED_SHA256}  $FILE" | shasum -a 256 -c -
           shasum -a 256 "$FILE" > artifacts/SHA256SUMS
@@ -45,7 +45,7 @@ jobs:
           import hashlib, json, plistlib, zipfile
           from pathlib import Path
 
-          ipa = next(Path("artifacts").glob("LiveContainer-SideStore-AutoRefresh-v3.1.0-build*.ipa"))
+          ipa = next(Path("artifacts").glob("LiveContainer-SideStore-AutoRefresh-nightly-20260918-build*.ipa"))
           with zipfile.ZipFile(ipa) as z:
               lc = plistlib.loads(z.read("Payload/LiveContainer.app/Info.plist"))
               ss = plistlib.loads(z.read("Payload/LiveContainer.app/Frameworks/SideStoreApp.framework/Info.plist"))
@@ -63,8 +63,8 @@ jobs:
               "sidestore_bundle": ss.get("CFBundleIdentifier"),
           }
           assert result["sha256"] == "2337e08a71b2af4fee930b59ccd28522563acd81e908069e56f6d27d1636daf4"
-          assert result["livecontainer_version"] == "3.8.9"
-          assert result["sidestore_version"] == "0.7.0"
+          assert result["livecontainer_version"] == "3.8.10"
+          assert result["sidestore_version"] == "0.7.0-20260918.492+12a496ca"
           assert result["sidestore_build"] == "0700"
           Path("artifacts/package-verification.json").write_text(
               json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
@@ -72,12 +72,12 @@ jobs:
           print(json.dumps(result, indent=2, ensure_ascii=False))
           PY
 
-      - name: Upload v3.1.0 baseline
+      - name: Upload nightly 20260918 baseline
         uses: actions/upload-artifact@v4
         with:
-          name: LiveContainer-SideStore-AutoRefresh-v3.1.0-build${{ github.run_number }}
+          name: LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}
           path: |
-            artifacts/LiveContainer-SideStore-AutoRefresh-v3.1.0-build${{ github.run_number }}.ipa
+            artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa
             artifacts/SHA256SUMS
             artifacts/package-verification.json
             artifacts/build-info.txt
