@@ -38,46 +38,68 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Materialize pinned LiveContainer + SideStore sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/logs work
+      - name: Checkout pinned LiveContainer sources
+        uses: actions/checkout@v4
+        with:
+          repository: LiveContainerMirror/LiveContainer
+          ref: ${{ env.LIVE_CONTAINER_REF }}
+          path: work/LiveContainer
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
 
-          fetch_archive() {
-            local repo="$1"
-            local ref="$2"
-            local dest="$3"
-            local label="$4"
-            local tmp
-            tmp="$(mktemp)"
-            echo "[SOURCE_FETCH] $label repo=$repo ref=$ref"
-            curl --fail --location --retry 5 --retry-delay 2 \
-              "https://codeload.github.com/${repo}/tar.gz/${ref}" -o "$tmp"
-            rm -rf "$dest"
-            mkdir -p "$dest"
-            tar -xzf "$tmp" --strip-components=1 -C "$dest"
-            rm -f "$tmp"
-            git -C "$dest" init -q
-            git -C "$dest" config user.email "build@local.invalid"
-            git -C "$dest" config user.name "AutoRefresh baseline"
-            git -C "$dest" add -A
-            git -C "$dest" commit -qm "baseline $label $ref"
-            printf '%s\n' "$ref" > "$dest/.upstream-commit"
-          }
+      - name: Checkout pinned LiveContainer OpenSSL
+        uses: actions/checkout@v4
+        with:
+          repository: krzyzanowskim/OpenSSL
+          ref: 623c84da314e85363236507ca38a4bde65df21c3
+          path: work/LiveContainer/OpenSSL
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
 
-          fetch_archive "LiveContainerMirror/LiveContainer" "$LIVE_CONTAINER_REF" "work/LiveContainer" "LiveContainer"
-          fetch_archive "krzyzanowskim/OpenSSL" "623c84da314e85363236507ca38a4bde65df21c3" "work/LiveContainer/OpenSSL" "OpenSSL"
-          # The 20260918 nightly points at litehook a7e9f59. The original
-          # LiveContainer/litehook endpoint is currently inaccessible to CI, but
-          # the same A20/_arm64e_x1 change was merged to opa334/litehook as
-          # commit 30a2625. Use that exact content as the buildable submodule
-          # substitute while preserving the exact LiveContainer 4dbe0f9 host source.
-          fetch_archive "opa334/litehook" "30a262515ee9afc3737d6e8e65052e636d18fe63" "work/LiveContainer/litehook" "litehook"
-          fetch_archive "SideStore/SideStore" "$EMBEDDED_SIDESTORE_REF" "work/EmbeddedSideStore" "EmbeddedSideStore"
-          fetch_archive "SideStore/minimuxer" "$MINIMUXER_REF" "work/EmbeddedSideStore/Dependencies/minimuxer" "minimuxer"
-          fetch_archive "SideStore/SideSign" "$SIDESIGN_REF" "work/EmbeddedSideStore/Dependencies/SideSign" "SideSign"
+      - name: Checkout pinned LiveContainer litehook
+        uses: actions/checkout@v4
+        with:
+          repository: opa334/litehook
+          ref: 30a262515ee9afc3737d6e8e65052e636d18fe63
+          path: work/LiveContainer/litehook
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
 
+      - name: Checkout exact embedded SideStore
+        uses: actions/checkout@v4
+        with:
+          repository: SideStore/SideStore
+          ref: ${{ env.EMBEDDED_SIDESTORE_REF }}
+          path: work/EmbeddedSideStore
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: Checkout exact embedded SideStore minimuxer
+        uses: actions/checkout@v4
+        with:
+          repository: SideStore/minimuxer
+          ref: ${{ env.MINIMUXER_REF }}
+          path: work/EmbeddedSideStore/Dependencies/minimuxer
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: Checkout exact embedded SideStore SideSign
+        uses: actions/checkout@v4
+        with:
+          repository: SideStore/SideSign
+          ref: ${{ env.SIDESIGN_REF }}
+          path: work/EmbeddedSideStore/Dependencies/SideSign
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: Prepare build logs
+        run: mkdir -p artifacts/logs
       - name: Prepare build logs
         run: mkdir -p artifacts/logs
 
@@ -102,14 +124,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(cat work/LiveContainer/.upstream-commit)" = "$LIVE_CONTAINER_REF"
-          test "$(cat work/LiveContainer/OpenSSL/.upstream-commit)" = "623c84da314e85363236507ca38a4bde65df21c3"
-          test "$(cat work/LiveContainer/litehook/.upstream-commit)" = "30a262515ee9afc3737d6e8e65052e636d18fe63"
-          test "$(cat work/EmbeddedSideStore/.upstream-commit)" = "$EMBEDDED_SIDESTORE_REF"
-          test "$(cat work/EmbeddedSideStore/Dependencies/minimuxer/.upstream-commit)" = "$MINIMUXER_REF"
-          test "$(cat work/EmbeddedSideStore/Dependencies/SideSign/.upstream-commit)" = "$SIDESIGN_REF"
-          printf 'livecontainer=%s\nsidestore=%s\nminimuxer=%s\nsidesign=%s\nlitehook_substitute=%s\ngsa_fix=%s\n' \
-            "$LIVE_CONTAINER_REF" "$EMBEDDED_SIDESTORE_REF" "$MINIMUXER_REF" "$SIDESIGN_REF" "$LITEHOOK_SUBSTITUTE" "$SIDESIGN_GSA_FIX" \
+          test "$(git -C work/LiveContainer rev-parse HEAD)" = "$LIVE_CONTAINER_REF"
+          test "$(git -C work/LiveContainer/OpenSSL rev-parse HEAD)" = "623c84da314e85363236507ca38a4bde65df21c3"
+          test "$(git -C work/LiveContainer/litehook rev-parse HEAD)" = "30a262515ee9afc3737d6e8e65052e636d18fe63"
+          test "$(git -C work/EmbeddedSideStore rev-parse HEAD)" = "$EMBEDDED_SIDESTORE_REF"
+          test "$(git -C work/EmbeddedSideStore/Dependencies/minimuxer rev-parse HEAD)" = "$MINIMUXER_REF"
+          test "$(git -C work/EmbeddedSideStore/Dependencies/SideSign rev-parse HEAD)" = "$SIDESIGN_REF"
+          printf 'livecontainer=%s\nsidestore=%s\nminimuxer=%s\nsidesign=%s\nlitehook=%s\ngsa_fix=%s\n' \
+            "$LIVE_CONTAINER_REF" "$EMBEDDED_SIDESTORE_REF" "$MINIMUXER_REF" "$SIDESIGN_REF" \
+            "30a262515ee9afc3737d6e8e65052e636d18fe63" "$SIDESIGN_GSA_FIX" \
             | tee artifacts/logs/upstream-auth-provenance.txt
           test "$(git -C idevice rev-parse HEAD)" = "$IDEVICE_REF"
           test "$(git -C jktcp rev-parse HEAD)" = "$JKTCP_REF"
@@ -146,49 +169,6 @@ jobs:
                       path.write_text(updated, encoding="utf-8")
                       changed += 1
           print(f"adapted NRG builder pin references in {changed} files")
-          PY
-
-      - name: Adapt NRG provenance checks for archive-materialized sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          def rw(path, transform):
-              p = Path(path)
-              t = p.read_text(encoding="utf-8")
-              nt = transform(t)
-              if nt == t:
-                  raise SystemExit(f"no change made: {path}")
-              p.write_text(nt, encoding="utf-8")
-
-          def source_updates(t):
-              old = "        if revision.returncode == 0 and revision.stdout.strip() == PINNED_SIDESTORE_REF:\n"
-              new = "        logical_revision = (candidate / '.upstream-commit').read_text(encoding='utf-8').strip() if (candidate / '.upstream-commit').is_file() else revision.stdout.strip()\n        if revision.returncode == 0 and logical_revision == PINNED_SIDESTORE_REF:\n"
-              return t.replace(old, new, 1)
-
-          def url_classification(t):
-              old = "        try:\n            side_store_root = pinned_source_root(\n                embedded_source, standalone_source, revision.stdout.strip(),\n                source_error_exists=source_error_path.is_file(), require_pinned=require_pinned)\n"
-              new = "        logical_revision = (source_path / '.upstream-commit').read_text(encoding='utf-8').strip() if (source_path / '.upstream-commit').is_file() else revision.stdout.strip()\n        try:\n            side_store_root = pinned_source_root(\n                embedded_source, standalone_source, logical_revision,\n                source_error_exists=source_error_path.is_file(), require_pinned=require_pinned)\n"
-              return t.replace(old, new, 1)
-
-          def candidate_test(t):
-              old = "        actual = subprocess.check_output(\n            [\"git\", \"-C\", str(side_source), \"rev-parse\", \"HEAD\"], text=True).strip()\n"
-              new = "        actual = ((side_source / '.upstream-commit').read_text(encoding='utf-8').strip() if (side_source / '.upstream-commit').is_file() else subprocess.check_output([\"git\", \"-C\", str(side_source), \"rev-parse\", \"HEAD\"], text=True).strip())\n"
-              return t.replace(old, new, 1)
-
-          def verifier(t):
-              old = "    try:\n        side_source_sha = subprocess.check_output(\n            [\"git\", \"-C\", str(side_source), \"rev-parse\", \"HEAD\"],\n            text=True, stderr=subprocess.PIPE).strip()\n    except subprocess.CalledProcessError as error:\n        raise ValueError(\"the SideStore source checkout has no readable Git revision\") from error\n"
-              new = "    try:\n        side_source_git_sha = subprocess.check_output([\"git\", \"-C\", str(side_source), \"rev-parse\", \"HEAD\"], text=True, stderr=subprocess.PIPE).strip()\n    except subprocess.CalledProcessError as error:\n        raise ValueError(\"the SideStore source checkout has no readable Git revision\") from error\n    upstream_marker = side_source / '.upstream-commit'\n    side_source_sha = upstream_marker.read_text(encoding='utf-8').strip() if upstream_marker.is_file() else side_source_git_sha\n"
-              nt = t.replace(old, new, 1)
-              return nt.replace("            source_ref=SOURCE_PINS[1],\n", "            source_ref=side_source_git_sha,\n", 1)
-
-          rw("builder/tests/test_v3_source_updates.py", source_updates)
-          rw("builder/tests/test_v3_source_url_classification_execution.py", url_classification)
-          rw("builder/tests/test_verify_candidate_ipa.py", candidate_test)
-          rw("builder/scripts/verify_candidate_ipa.py", verifier)
-          print("archive provenance compatibility patches: PASS")
           PY
 
       - name: Run repository checks before patches
