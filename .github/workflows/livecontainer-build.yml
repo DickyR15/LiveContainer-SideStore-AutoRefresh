@@ -22,6 +22,7 @@ env:
   JKTCP_REF: e674e1eee6d5943e13b1eba0bd24a9dd0b2fa020
   BASELINE: nightly-20260918
   BUILDER_REF: 651587433eb7142089509e558dcfba9eb69d0470
+  LITEHOOK_SUBSTITUTE: opa334/litehook@30a262515ee9afc3737d6e8e65052e636d18fe63
 
 jobs:
   source-and-host-build:
@@ -67,11 +68,12 @@ jobs:
 
           fetch_archive "LiveContainerMirror/LiveContainer" "$LIVE_CONTAINER_REF" "work/LiveContainer" "LiveContainer"
           fetch_archive "krzyzanowskim/OpenSSL" "623c84da314e85363236507ca38a4bde65df21c3" "work/LiveContainer/OpenSSL" "OpenSSL"
-          # The 20260918 nightly points at litehook a7e9f59, which is no longer
-          # directly reachable from the public litehook archive endpoint. Use the
-          # maintained LiveContainer/litehook mainline so the 3.8.10 host source
-          # remains buildable while keeping the exact 4dbe0f9 host revision.
-          fetch_archive "LiveContainer/litehook" "main" "work/LiveContainer/litehook" "litehook"
+          # The 20260918 nightly points at litehook a7e9f59. The original
+          # LiveContainer/litehook endpoint is currently inaccessible to CI, but
+          # the same A20/_arm64e_x1 change was merged to opa334/litehook as
+          # commit 30a2625. Use that exact content as the buildable submodule
+          # substitute while preserving the exact LiveContainer 4dbe0f9 host source.
+          fetch_archive "opa334/litehook" "30a262515ee9afc3737d6e8e65052e636d18fe63" "work/LiveContainer/litehook" "litehook"
           fetch_archive "SideStore/SideStore" "$EMBEDDED_SIDESTORE_REF" "work/EmbeddedSideStore" "EmbeddedSideStore"
           fetch_archive "SideStore/minimuxer" "$MINIMUXER_REF" "work/EmbeddedSideStore/Dependencies/minimuxer" "minimuxer"
           fetch_archive "SideStore/SideSign" "$SIDESIGN_REF" "work/EmbeddedSideStore/Dependencies/SideSign" "SideSign"
@@ -102,12 +104,12 @@ jobs:
           set -euo pipefail
           test "$(cat work/LiveContainer/.upstream-commit)" = "$LIVE_CONTAINER_REF"
           test "$(cat work/LiveContainer/OpenSSL/.upstream-commit)" = "623c84da314e85363236507ca38a4bde65df21c3"
-          test "$(cat work/LiveContainer/litehook/.upstream-commit)" = "main"
+          test "$(cat work/LiveContainer/litehook/.upstream-commit)" = "30a262515ee9afc3737d6e8e65052e636d18fe63"
           test "$(cat work/EmbeddedSideStore/.upstream-commit)" = "$EMBEDDED_SIDESTORE_REF"
           test "$(cat work/EmbeddedSideStore/Dependencies/minimuxer/.upstream-commit)" = "$MINIMUXER_REF"
           test "$(cat work/EmbeddedSideStore/Dependencies/SideSign/.upstream-commit)" = "$SIDESIGN_REF"
-          printf 'livecontainer=%s\nsidestore=%s\nminimuxer=%s\nsidesign=%s\ngsa_fix=%s\n' \
-            "$LIVE_CONTAINER_REF" "$EMBEDDED_SIDESTORE_REF" "$MINIMUXER_REF" "$SIDESIGN_REF" "$SIDESIGN_GSA_FIX" \
+          printf 'livecontainer=%s\nsidestore=%s\nminimuxer=%s\nsidesign=%s\nlitehook_substitute=%s\ngsa_fix=%s\n' \
+            "$LIVE_CONTAINER_REF" "$EMBEDDED_SIDESTORE_REF" "$MINIMUXER_REF" "$SIDESIGN_REF" "$LITEHOOK_SUBSTITUTE" "$SIDESIGN_GSA_FIX" \
             | tee artifacts/logs/upstream-auth-provenance.txt
           test "$(git -C idevice rev-parse HEAD)" = "$IDEVICE_REF"
           test "$(git -C jktcp rev-parse HEAD)" = "$JKTCP_REF"
