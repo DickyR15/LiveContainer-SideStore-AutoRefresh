@@ -137,6 +137,36 @@ def main() -> None:
         "    }"
     )
 
+    # Newer SideStore adds three more presenter-backed customization methods at the
+    # tail of PipelineHandler. Keep protocol-compatible headless defaults and drop
+    # the private image-picker helper, which is only used by that UI path.
+    tail_start = "\n    @MainActor\n    func resolveAppGroupMismatch("
+    tail_end = "\n}\n\nprivate final class ImagePickerDelegateHandler"
+    if tail_start not in text or tail_end not in text:
+        raise SystemExit("pipeline prepatch: newer customization tail layout changed")
+    start = text.index(tail_start)
+    end = text.index(tail_end, start)
+    tail_replacement = (
+        "\n    @MainActor\n"
+        "    func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String) async throws -> AppGroupResolution {\n"
+        f"    // {DECISIONS}: preserve the validated corrected group without UI.\n"
+        "    return .correctAndProceed(correctedGroup)\n"
+        "    }\n\n"
+        "    @MainActor\n"
+        "    func resolveAppIconCustomization(appName: String) async throws -> URL? {\n"
+        f"    // {DECISIONS}: the embedded service never presents icon pickers.\n"
+        "    return nil\n"
+        "    }\n\n"
+        "    @MainActor\n"
+        "    func resolveProvisioningProfileCustomization(appName: String, bundleID: String) async throws -> ProfileCustomizationChoice? {\n"
+        f"    // {DECISIONS}: use the automatic profile without a UI choice.\n"
+        "    return .defaultProfile\n"
+        "    }\n"
+    )
+    text = text[:start] + tail_replacement + text[end:]
+    helper_start = text.find("\n\nprivate final class ImagePickerDelegateHandler")
+    if helper_start >= 0:
+        text = text[:helper_start] + "\n";
     forbidden = (
         "presenterProvider", "activePresenter", "isPresenterAvailable",
         "isResignActive:", "UIAlertController", "ReviewPermissionsViewController",
