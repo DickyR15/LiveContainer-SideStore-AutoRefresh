@@ -72,7 +72,7 @@ def main() -> None:
         ),
         (
             "    func requestBackgroundSuspension() async",
-            f"    func requestBackgroundSuspension() async {{\n    // {DECISIONS}: background suspension is host-owned.\n}}",
+            f"    func requestBackgroundSuspension() async {{\n    // {DECISIONS}: suspension is controlled by the host lifecycle.\n}}",
         ),
         (
             "    func resolveBundleIDOverride(initialBundleID: String) async throws -> (customID: String, appendTeamID: Bool)?",
