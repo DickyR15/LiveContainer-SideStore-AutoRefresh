@@ -1,4 +1,4 @@
-name: LiveContainer embedded SideStore build
+name: LiveContainer Nightly 20260918 + SideStore AutoRefresh build
 
 on:
   workflow_dispatch:
@@ -11,14 +11,15 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LIVE_CONTAINER_REF: 12377cf3b91d51739a33f14a302e5f522b238593
-  EMBEDDED_SIDESTORE_REF: ff25922e5c13ccfafd83bda5092910d848ebd409
+  LIVE_CONTAINER_REF: 4dbe0f9a626de801184a42c0be8d2cb105058e3d
+  EMBEDDED_SIDESTORE_REF: 12a496ca1c766a102193634879823d16610bf1cd
   MINIMUXER_REF: 98c3c79982f813878e922ab42f9545314a700f0c
   SIDESIGN_REF: a731c0d5a9a6617c7b385ae493e07ffb7f81cd5d
   SIDESIGN_GSA_FIX: 35993d7f68950ce00d6bf1fd0fbcaa7bef51dc9c
   IDEVICE_REF: ebd7dadfc55d1c4facee3d11ecf5b28e20548b57
   JKTCP_REF: e674e1eee6d5943e13b1eba0bd24a9dd0b2fa020
-  UNIFIED_RELEASE_BASELINE: v3.1.0
+  UNIFIED_RELEASE_BASELINE: nightly-20260918
+  BUILDER_REF: local-nightly-20260918
   BUILDER_REF: 651587433eb7142089509e558dcfba9eb69d0470
 
 jobs:
@@ -38,7 +39,7 @@ jobs:
       - name: Checkout pinned LiveContainer sources
         uses: actions/checkout@v4
         with:
-          repository: LiveContainer/LiveContainer
+          repository: LiveContainerMirror/LiveContainer
           ref: ${{ env.LIVE_CONTAINER_REF }}
           path: work/LiveContainer
           fetch-depth: 1
@@ -189,7 +190,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: combined-v3-layout-evidence
+          name: combined-nightly-20260918-layout-evidence
           path: |
             artifacts/layout-evidence/**/*.json
             artifacts/layout-evidence/**/*.png
@@ -356,16 +357,16 @@ jobs:
             --root work/LiveContainer \
             --host "$RUNNER_TEMP/livecontainer-derived-data/Build/Products/Release-iphoneos/LiveContainer.app" \
             --side "$RUNNER_TEMP/embedded-sidestore-derived-data/Build/Products/Release-iphoneos/SideStore.app" \
-            --output artifacts/LiveContainer-SideStore-v3.1.0-build${{ github.run_number }}.ipa 2>&1 | tee artifacts/logs/combined-packaging.log
-          python3 builder/scripts/patch_combined_refresh_contract.py --verify-ipa artifacts/LiveContainer-SideStore-v3.1.0-build${{ github.run_number }}.ipa \
+            --output artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa 2>&1 | tee artifacts/logs/combined-packaging.log
+          python3 builder/scripts/patch_combined_refresh_contract.py --verify-ipa artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa \
             2>&1 | tee artifacts/logs/runtime-contract-verification.log
           printf 'builder_repository=NRG-Wardog/sidestore-auto-refresh\nbuilder_commit=%s\nbuilder_baseline=%s\n' "$BUILDER_REF" "$UNIFIED_RELEASE_BASELINE" > artifacts/builder-commit.txt
           python3 builder/scripts/combined_build_evidence.py collect --product v3.0.3-rc \
-            --ipa artifacts/LiveContainer-SideStore-v3.1.0-build${{ github.run_number }}.ipa --output artifacts/debug-evidence --source work/LiveContainer --side-source work/EmbeddedSideStore \
+            --ipa artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa --output artifacts/debug-evidence --source work/LiveContainer --side-source work/EmbeddedSideStore \
             "$RUNNER_TEMP/livecontainer-derived-data/Build/Products/Release-iphoneos" \
             "$RUNNER_TEMP/embedded-sidestore-derived-data/Build/Products/Release-iphoneos"
           python3 builder/scripts/verify_candidate_ipa.py \
-            --ipa artifacts/LiveContainer-SideStore-v3.1.0-build${{ github.run_number }}.ipa \
+            --ipa artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa \
             --provenance artifacts/debug-evidence/candidate-provenance.json \
             --product v3.0.3-rc \
             --side-source work/EmbeddedSideStore \
@@ -380,7 +381,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import zipfile
-          ipa = Path('artifacts/LiveContainer-SideStore-v3.1.0-build${{ github.run_number }}.ipa')
+          ipa = Path('artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa')
           embedded = 'Payload/LiveContainer.app/Frameworks/SideStoreApp.framework/SideStore'
           with zipfile.ZipFile(ipa) as archive:
               executable = archive.read(embedded)
@@ -398,11 +399,11 @@ jobs:
       - name: Upload combined LiveContainer IPA
         uses: actions/upload-artifact@v4
         with:
-          name: LiveContainer-SideStore-v3.1.0-build${{ github.run_number }}-IPA
+          name: LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}-IPA
           path: |
-            artifacts/LiveContainer-SideStore-v3.1.0-build${{ github.run_number }}.ipa
-            artifacts/LiveContainer-SideStore-v3.1.0-build${{ github.run_number }}.verification.json
-            artifacts/LiveContainer-SideStore-v3.1.0-build${{ github.run_number }}.runtime-verification.json
+            artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa
+            artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.verification.json
+            artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.runtime-verification.json
             artifacts/builder-commit.txt
             artifacts/debug-evidence/candidate-provenance.json
             artifacts/candidate-package-verification.json
@@ -424,7 +425,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: combined-v3-debug-evidence
+          name: combined-nightly-20260918-debug-evidence
           path: artifacts/debug-evidence
           include-hidden-files: true
           if-no-files-found: warn
@@ -433,7 +434,7 @@ jobs:
       - name: Download uploaded candidate for delivery verification
         uses: actions/download-artifact@v4
         with:
-          name: LiveContainer-SideStore-v3.1.0-build${{ github.run_number }}-IPA
+          name: LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}-IPA
           path: artifacts/downloaded-ipa
 
       - name: Download uploaded source and symbol evidence
@@ -447,7 +448,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 builder/scripts/verify_candidate_ipa.py \
-            --ipa artifacts/downloaded-ipa/LiveContainer-SideStore-v3.1.0-build${{ github.run_number }}.ipa \
+            --ipa artifacts/downloaded-ipa/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa \
             --provenance artifacts/downloaded-debug-evidence/candidate-provenance.json \
             --product v3.0.3-rc \
             --side-source work/EmbeddedSideStore \
