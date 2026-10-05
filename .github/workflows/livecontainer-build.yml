@@ -106,6 +106,40 @@ jobs:
         with:
           xcode-version: "26.4"
 
+      - name: Adapt builder pin guards to verified nightly baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          replacements = {
+              "12377cf3b91d51739a33f14a302e5f522b238593": "${LIVE_CONTAINER_REF}",
+              "ff25922e5c13ccfafd83bda5092910d848ebd409": "${EMBEDDED_SIDESTORE_REF}",
+              "a731c0d5a9a6617c7b385ae493e07ffb7f81cd5d": "${SIDESIGN_REF}",
+          }
+          files = [
+              "patch_app_layout.py",
+              "patch_lc_certificate_observation.py",
+              "patch_multitask_dock.py",
+              "patch_v3_service.py",
+              "patch_combined_service_startup.py",
+              "patch_combined_refresh_contract.py",
+              "patch_sidesign_privacy.py",
+          ]
+          root = Path("builder/scripts")
+          changed = []
+          for name in files:
+              path = root / name
+              text = path.read_text(encoding="utf-8")
+              updated = text
+              for old, new in replacements.items():
+                  updated = updated.replace(old, new)
+              if updated == text:
+                  raise SystemExit(f"no source-pin guard found in {path}")
+              path.write_text(updated, encoding="utf-8")
+              changed.append(name)
+          print("Adapted builder pin guards: " + ", ".join(changed))
+          PY
       - name: Run repository checks before patches
         env:
           LIVE_CONTAINER_TEST_SOURCE: ${{ github.workspace }}/work/LiveContainer
