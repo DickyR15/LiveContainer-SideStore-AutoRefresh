@@ -37,6 +37,16 @@ def main() -> None:
             raise SystemExit(f"no source pin found in {name}")
         path.write_text(updated, encoding="utf-8")
 
+    multitask = ROOT / "patch_multitask_dock.py"
+    multitask_text = multitask.read_text(encoding="utf-8")
+    if "import os" not in multitask_text.splitlines()[:20]:
+        multitask_text = multitask_text.replace("from pathlib import Path\\n", "from pathlib import Path\\nimport os\\n", 1)
+    multitask_text = multitask_text.replace(
+        'PIN = "12377cf3b91d51739a33f14a302e5f522b238593"\\n',
+        'PIN = os.environ["LIVE_CONTAINER_REF"]\\n',
+        1,
+    )
+    multitask.write_text(multitask_text, encoding="utf-8")
     service = ROOT / "patch_v3_service.py"
     text = service.read_text(encoding="utf-8")
     # Newer source formatting can differ while preserving the same headless contract.
@@ -98,21 +108,3 @@ def main() -> None:
     # Newer SideStore removed the old AppManager sign-in/deactivate wrappers,
     # but retained one presenter-aware PipelineHandler factory for normal UI
     # operations. The embedded service must use the presenter-free handler.
-    if (
-        "func signIn(presentingViewController: UIViewController?," not in text
-        and "func deactivateApps(for appBundle: ALTApplication" not in text
-    ):
-        if pipeline in text:
-            text = text.replace(pipeline, "return PipelineHandler()", 1)
-        if marker not in text:
-            text += "\\n// " + marker + ": current SideStore AppManager no longer owns sign-in UI.\\n"
-            text += "// " + pairing_marker + ": current AppManager has no legacy sign-in UI wrapper.\\n"
-        return text
-    return _legacy_headless_app_manager_ui(text)
-
-
-'''
-        text = text.replace(legacy, compat + legacy, 1)
-
-    service.write_text(text, encoding="utf-8")
-    print(f"Builder adapted: LiveContainer={LIVE} SideStore={SIDESTORE} SideSign={SIDESIGN}")
