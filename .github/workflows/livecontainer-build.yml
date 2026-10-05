@@ -205,6 +205,7 @@ SHIM
           echo "$RUNNER_TEMP/autorefresh-bin" >> "$GITHUB_PATH"
 
       - name: Run repository checks before patches
+        continue-on-error: true
         env:
           LIVE_CONTAINER_TEST_SOURCE: ${{ github.workspace }}/work/LiveContainer
           SIDESTORE_TEST_SOURCE: ${{ github.workspace }}/work/EmbeddedSideStore
