@@ -129,6 +129,17 @@ jobs:
           ]
           root = Path("builder/scripts")
           changed = []
+          # The 20260918 SideStore AuthManager keeps the same session lifecycle
+          # but its signOut declaration is async; adapt that structural anchor too.
+          service = root / "patch_v3_service.py"
+          service_text = service.read_text(encoding="utf-8")
+          old_anchor = '    ) {\\n        self.session = nil\\n'
+          new_anchor = '    ) async {\\n        self.session = nil\\n'
+          if old_anchor in service_text:
+              service_text = service_text.replace(old_anchor, new_anchor, 1)
+          elif new_anchor not in service_text:
+              raise SystemExit("expected AuthManager session-clear anchor is missing")
+          service.write_text(service_text, encoding="utf-8")
           for name in files:
               path = root / name
               text = path.read_text(encoding="utf-8")
