@@ -55,6 +55,25 @@ def main() -> None:
             '                pass\n',
             1,
         )
+    # Current SignInOperation keeps trailing commas in initializer parameters.
+    init_anchor = "        skipCertificateProvisioning: Bool = false\\n"
+    init_anchor_comma = "        skipCertificateProvisioning: Bool = false,\\n"
+    if init_anchor_comma not in text and init_anchor not in text:
+        raise SystemExit("v3 service: SignInOperation certificate-provisioning initializer anchor missing")
+    if init_anchor_comma in text:
+        text = text.replace(
+            init_anchor_comma,
+            "        skipCertificateProvisioning: Bool = false,\\n"
+            "        v3ForceProvisioningRetry: Bool = false,\\n",
+            1,
+        )
+    else:
+        text = text.replace(
+            init_anchor,
+            "        skipCertificateProvisioning: Bool = false,\\n"
+            "        v3ForceProvisioningRetry: Bool = false,\\n",
+            1,
+        )
     old = '    ) {\\n        self.session = nil\\n'
     new = '    ) async {\\n        self.session = nil\\n'
     if old in text:
@@ -97,6 +116,3 @@ def main() -> None:
 
     service.write_text(text, encoding="utf-8")
     print(f"Builder adapted: LiveContainer={LIVE} SideStore={SIDESTORE} SideSign={SIDESIGN}")
-
-if __name__ == "__main__":
-    main()
