@@ -39,21 +39,25 @@ jobs:
           persist-credentials: false
 
       - name: Checkout pinned LiveContainer sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/logs
-          git clone --filter=blob:none https://github.com/LiveContainer/LiveContainer.git work/LiveContainer
-          git -C work/LiveContainer checkout --detach "$LIVE_CONTAINER_REF"
-          git -C work/LiveContainer submodule update --init --recursive --depth=1
+        uses: actions/checkout@v4
+        with:
+          repository: LiveContainer/LiveContainer
+          ref: ${{ env.LIVE_CONTAINER_REF }}
+          path: work/LiveContainer
+          fetch-depth: 1
+          submodules: recursive
 
       - name: Checkout pinned embedded SideStore sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          git clone --filter=blob:none https://github.com/LiveContainer/SideStore.git work/EmbeddedSideStore
-          git -C work/EmbeddedSideStore checkout --detach "$EMBEDDED_SIDESTORE_REF"
-          git -C work/EmbeddedSideStore submodule update --init --recursive --depth=1
+        uses: actions/checkout@v4
+        with:
+          repository: LiveContainer/SideStore
+          ref: ${{ env.EMBEDDED_SIDESTORE_REF }}
+          path: work/EmbeddedSideStore
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Prepare build logs
+        run: mkdir -p artifacts/logs
 
       - name: Checkout pinned idevice
         uses: actions/checkout@v4
