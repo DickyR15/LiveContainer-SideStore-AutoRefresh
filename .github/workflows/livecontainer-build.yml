@@ -14,9 +14,9 @@ concurrency:
 
 env:
   LIVE_CONTAINER_REF: 4dbe0f9a626de801184a42c0be8d2cb105058e3d
-  EMBEDDED_SIDESTORE_REF: ff25922e5c13ccfafd83bda5092910d848ebd409
-  MINIMUXER_REF: 98c3c79982f813878e922ab42f9545314a700f0c
-  SIDESIGN_REF: a731c0d5a9a6617c7b385ae493e07ffb7f81cd5d
+  EMBEDDED_SIDESTORE_REF: 12a496ca1c766a102193634879823d16610bf1cd
+  MINIMUXER_REF: 20248550bbe014805460d4fa22ea69f146d338a0
+  SIDESIGN_REF: df2b8e4257454f0c7629276d409d6e9d7953fdf6
   SIDESIGN_GSA_FIX: 35993d7f68950ce00d6bf1fd0fbcaa7bef51dc9c
   IDEVICE_REF: ebd7dadfc55d1c4facee3d11ecf5b28e20548b57
   JKTCP_REF: e674e1eee6d5943e13b1eba0bd24a9dd0b2fa020
@@ -68,22 +68,15 @@ jobs:
           submodules: false
           persist-credentials: false
 
-      - name: Materialize exact embedded SideStore source
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf work/EmbeddedSideStore
-          mkdir -p work/EmbeddedSideStore
-          tmp="$(mktemp)"
-          curl --fail --location --retry 5 --retry-delay 2 \
-            "https://codeload.github.com/LiveContainer/SideStore/tar.gz/$EMBEDDED_SIDESTORE_REF" -o "$tmp"
-          tar -xzf "$tmp" --strip-components=1 -C work/EmbeddedSideStore
-          rm -f "$tmp"
-          git -C work/EmbeddedSideStore init -q
-          git -C work/EmbeddedSideStore config user.email "build@local.invalid"
-          git -C work/EmbeddedSideStore config user.name "AutoRefresh source materializer"
-          git -C work/EmbeddedSideStore add -A
-          git -C work/EmbeddedSideStore commit -qm "materialized upstream SideStore $EMBEDDED_SIDESTORE_REF"
+      - name: Checkout exact embedded SideStore source
+        uses: actions/checkout@v4
+        with:
+          repository: SideStore/SideStore
+          ref: ${{ env.EMBEDDED_SIDESTORE_REF }}
+          path: work/EmbeddedSideStore
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
 
       - name: Checkout exact embedded SideStore minimuxer
         uses: actions/checkout@v4
@@ -105,10 +98,6 @@ jobs:
           submodules: false
           persist-credentials: false
 
-      - name: Prepare build logs
-        run: mkdir -p artifacts/logs
-      - name: Prepare build logs
-        run: mkdir -p artifacts/logs
       - name: Prepare build logs
         run: mkdir -p artifacts/logs
 
