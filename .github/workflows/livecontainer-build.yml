@@ -66,7 +66,7 @@ jobs:
           }
 
           fetch_archive "LiveContainerMirror/LiveContainer" "$LIVE_CONTAINER_REF" "work/LiveContainer" "LiveContainer"
-          fetch_archive "krzyzanovski/OpenSSL" "623c84da314e85363236507ca38a4bde65df21c3" "work/LiveContainer/OpenSSL" "OpenSSL"
+          fetch_archive "krzyzanowskim/OpenSSL" "623c84da314e85363236507ca38a4bde65df21c3" "work/LiveContainer/OpenSSL" "OpenSSL"
           fetch_archive "LiveContainer/litehook" "a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9" "work/LiveContainer/litehook" "litehook"
           fetch_archive "SideStore/SideStore" "$EMBEDDED_SIDESTORE_REF" "work/EmbeddedSideStore" "EmbeddedSideStore"
           fetch_archive "SideStore/minimuxer" "$MINIMUXER_REF" "work/EmbeddedSideStore/Dependencies/minimuxer" "minimuxer"
