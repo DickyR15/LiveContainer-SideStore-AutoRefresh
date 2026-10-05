@@ -62,7 +62,7 @@ jobs:
               "livecontainer_bundle": lc.get("CFBundleIdentifier"),
               "sidestore_bundle": ss.get("CFBundleIdentifier"),
           }
-          assert result["sha256"] == "2337e08a71b2af4fee930b59ccd28522563acd81e908069e56f6d27d1636daf4"
+          assert result["sha256"] == "bec41bc21d75a0f2e85a0aa589ce5772e24e410deb017486758a3bc0503c8de7"
           assert result["livecontainer_version"] == "3.8.10"
           assert result["sidestore_version"] == "0.7.0-20260918.492+12a496ca"
           assert result["sidestore_build"] == "0700"
