@@ -14,9 +14,9 @@ concurrency:
 
 env:
   LIVE_CONTAINER_REF: 4dbe0f9a626de801184a42c0be8d2cb105058e3d
-  EMBEDDED_SIDESTORE_REF: 12a496ca1c766a102193634879823d16610bf1cd
-  MINIMUXER_REF: 20248550bbe014805460d4fa22ea69f146d338a0
-  SIDESIGN_REF: df2b8e4257454f0c7629276d409d6e9d7953fdf6
+  EMBEDDED_SIDESTORE_REF: ff25922e5c13ccfafd83bda5092910d848ebd409
+  MINIMUXER_REF: 98c3c79982f813878e922ab42f9545314a700f0c
+  SIDESIGN_REF: a731c0d5a9a6617c7b385ae493e07ffb7f81cd5d
   SIDESIGN_GSA_FIX: 35993d7f68950ce00d6bf1fd0fbcaa7bef51dc9c
   IDEVICE_REF: ebd7dadfc55d1c4facee3d11ecf5b28e20548b57
   JKTCP_REF: e674e1eee6d5943e13b1eba0bd24a9dd0b2fa020
@@ -61,8 +61,8 @@ jobs:
       - name: Checkout pinned LiveContainer litehook
         uses: actions/checkout@v4
         with:
-          repository: opa334/litehook
-          ref: 30a262515ee9afc3737d6e8e65052e636d18fe63
+          repository: LiveContainer/litehook
+          ref: a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9
           path: work/LiveContainer/litehook
           fetch-depth: 1
           submodules: false
@@ -71,7 +71,7 @@ jobs:
       - name: Checkout exact embedded SideStore
         uses: actions/checkout@v4
         with:
-          repository: SideStore/SideStore
+          repository: LiveContainer/SideStore
           ref: ${{ env.EMBEDDED_SIDESTORE_REF }}
           path: work/EmbeddedSideStore
           fetch-depth: 1
@@ -102,6 +102,8 @@ jobs:
         run: mkdir -p artifacts/logs
       - name: Prepare build logs
         run: mkdir -p artifacts/logs
+      - name: Prepare build logs
+        run: mkdir -p artifacts/logs
 
       - name: Checkout pinned idevice
         uses: actions/checkout@v4
@@ -126,13 +128,14 @@ jobs:
           set -euo pipefail
           test "$(git -C work/LiveContainer rev-parse HEAD)" = "$LIVE_CONTAINER_REF"
           test "$(git -C work/LiveContainer/OpenSSL rev-parse HEAD)" = "623c84da314e85363236507ca38a4bde65df21c3"
-          test "$(git -C work/LiveContainer/litehook rev-parse HEAD)" = "30a262515ee9afc3737d6e8e65052e636d18fe63"
+          test "$(git -C work/LiveContainer/litehook rev-parse HEAD)" = "a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9"
           test "$(git -C work/EmbeddedSideStore rev-parse HEAD)" = "$EMBEDDED_SIDESTORE_REF"
           test "$(git -C work/EmbeddedSideStore/Dependencies/minimuxer rev-parse HEAD)" = "$MINIMUXER_REF"
           test "$(git -C work/EmbeddedSideStore/Dependencies/SideSign rev-parse HEAD)" = "$SIDESIGN_REF"
+          git -C work/EmbeddedSideStore/Dependencies/SideSign merge-base --is-ancestor "$SIDESIGN_GSA_FIX" HEAD
           printf 'livecontainer=%s\nsidestore=%s\nminimuxer=%s\nsidesign=%s\nlitehook=%s\ngsa_fix=%s\n' \
             "$LIVE_CONTAINER_REF" "$EMBEDDED_SIDESTORE_REF" "$MINIMUXER_REF" "$SIDESIGN_REF" \
-            "30a262515ee9afc3737d6e8e65052e636d18fe63" "$SIDESIGN_GSA_FIX" \
+            "a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9" "$SIDESIGN_GSA_FIX" \
             | tee artifacts/logs/upstream-auth-provenance.txt
           test "$(git -C idevice rev-parse HEAD)" = "$IDEVICE_REF"
           test "$(git -C jktcp rev-parse HEAD)" = "$JKTCP_REF"
@@ -142,33 +145,25 @@ jobs:
         with:
           xcode-version: "26.4"
 
-      - name: Adapt NRG builder pins to 20260918 baseline
+      - name: Adapt NRG builder LiveContainer pin to 3.8.10
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          replacements = {
-              "12377cf3b91d51739a33f14a302e5f522b238593": "4dbe0f9a626de801184a42c0be8d2cb105058e3d",
-              "ff25922e5c13ccfafd83bda5092910d848ebd409": "12a496ca1c766a102193634879823d16610bf1cd",
-              "d57586ff506199ecfa8b78048930da821e5237de": "20248550bbe014805460d4fa22ea69f146d338a0",
-              "a731c0d5a9a6617c7b385ae493e07ffb7f81cd5d": "df2b8e4257454f0c7629276d409d6e9d7953fdf6",
-          }
-          roots = [Path("builder/tests"), Path("builder/scripts"), Path("builder/.github/workflows")]
-          suffixes = {".py", ".yml", ".yaml"}
+          old = "12377cf3b91d51739a33f14a302e5f522b238593"
+          new = "4dbe0f9a626de801184a42c0be8d2cb105058e3d"
           changed = 0
-          for root in roots:
+          for root in [Path("builder/tests"), Path("builder/scripts"), Path("builder/.github/workflows")]:
               for path in root.rglob("*"):
-                  if not path.is_file() or path.suffix not in suffixes:
+                  if not path.is_file() or path.suffix not in {".py", ".yml", ".yaml"}:
                       continue
-                  text = path.read_text(encoding="utf-8")
-                  updated = text
-                  for old, new in replacements.items():
-                      updated = updated.replace(old, new)
-                  if updated != text:
-                      path.write_text(updated, encoding="utf-8")
+                  t = path.read_text(encoding="utf-8")
+                  u = t.replace(old, new)
+                  if u != t:
+                      path.write_text(u, encoding="utf-8")
                       changed += 1
-          print(f"adapted NRG builder pin references in {changed} files")
+          print(f"adapted LiveContainer pin in {changed} builder files; SideStore pin remains NRG 0.7.0 baseline")
           PY
 
       - name: Run repository checks before patches
