@@ -2,9 +2,6 @@ name: LiveContainer embedded SideStore build
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, "work/**"]
-  pull_request:
 
 permissions:
   contents: read
