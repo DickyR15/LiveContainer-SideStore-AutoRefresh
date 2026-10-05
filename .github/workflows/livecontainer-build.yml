@@ -3,7 +3,7 @@ name: LiveContainer Nightly 20260918 + SideStore AutoRefresh build
 on:
   workflow_dispatch:
   push:
-    branches: [build/nightly-20260918-autorefresh]
+    branches: [build/final-lc3810]
 
 permissions:
   contents: read
