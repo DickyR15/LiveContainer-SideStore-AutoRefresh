@@ -106,75 +106,17 @@ jobs:
         with:
           xcode-version: "26.4"
 
-      - name: Adapt builder pin guards to verified nightly baseline
+      - name: Checkout workflow repository patches
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          fetch-depth: 1
+
+      - name: Adapt builder to verified nightly baseline
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import os
-          replacements = {
-              "12377cf3b91d51739a33f14a302e5f522b238593": os.environ["LIVE_CONTAINER_REF"],
-              "ff25922e5c13ccfafd83bda5092910d848ebd409": os.environ["EMBEDDED_SIDESTORE_REF"],
-              "a731c0d5a9a6617c7b385ae493e07ffb7f81cd5d": os.environ["SIDESIGN_REF"],
-          }
-          files = [
-              "patch_app_layout.py",
-              "patch_lc_certificate_observation.py",
-              "patch_multitask_dock.py",
-              "patch_v3_service.py",
-              "patch_combined_service_startup.py",
-              "patch_combined_refresh_contract.py",
-              "patch_sidesign_privacy.py",
-          ]
-          root = Path("builder/scripts")
-          changed = []
-          # The 20260918 SideStore AuthManager keeps the same session lifecycle
-          # but its signOut declaration is async; adapt that structural anchor too.
-          service = root / "patch_v3_service.py"
-          service_text = service.read_text(encoding="utf-8")
-          old_anchor = '    ) {\\n        self.session = nil\\n'
-          new_anchor = '    ) async {\\n        self.session = nil\\n'
-          if old_anchor in service_text:
-              service_text = service_text.replace(old_anchor, new_anchor, 1)
-          elif new_anchor not in service_text:
-              raise SystemExit("expected AuthManager session-clear anchor is missing")
-          service.write_text(service_text, encoding="utf-8")
-          # Newer SideStore revisions removed the AppManager sign-in/deactivate
-          # UI wrappers upstream. Treat that as an already-headless boundary.
-          service_text = service.read_text(encoding="utf-8")
-          marker_block = (
-              "def headless_app_manager_ui(text):",
-              "    text = headless_app_manager_persisted_error_privacy(text)",
-              "    marker = \"V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1\"",
-          )
-          compat_anchor = "    start_marker = \"    func signIn(presentingViewController: UIViewController?,\\n\""
-          compat_code = """    if (
-        \"func signIn(presentingViewController: UIViewController?,\" not in text and
-        \"func deactivateApps(for appBundle: ALTApplication\" not in text
-    ):
-        if marker not in text:
-            text += \"\\n    // V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1: upstream AppManager no longer owns sign-in.\\n\"
-            text += \"    // V3_TYPED_PAIRING_FAILURE_PROPAGATION_V1: current AppManager has no legacy sign-in UI wrapper.\\n\"
-        return text
-"""
-
-          if compat_anchor not in service_text:
-              raise SystemExit("AppManager compatibility anchor not found in v3 service patch")
-          service_text = service_text.replace(compat_anchor, compat_code + compat_anchor, 1)
-          service.write_text(service_text, encoding="utf-8")
-          for name in files:
-              path = root / name
-              text = path.read_text(encoding="utf-8")
-              updated = text
-              for old, new in replacements.items():
-                  updated = updated.replace(old, new)
-              if updated == text:
-                  raise SystemExit(f"no source-pin guard found in {path}")
-              path.write_text(updated, encoding="utf-8")
-              changed.append(name)
-          print("Adapted builder pin guards: " + ", ".join(changed))
-          PY
+          python3 controller/ci/adapt_builder_for_nightly.py | tee artifacts/logs/builder-adaptation.log
       - name: Run repository checks before patches
         env:
           LIVE_CONTAINER_TEST_SOURCE: ${{ github.workspace }}/work/LiveContainer
