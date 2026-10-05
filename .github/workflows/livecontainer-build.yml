@@ -14,9 +14,9 @@ concurrency:
 
 env:
   LIVE_CONTAINER_REF: 4dbe0f9a626de801184a42c0be8d2cb105058e3d
-  EMBEDDED_SIDESTORE_REF: 12a496ca1c766a102193634879823d16610bf1cd
-  MINIMUXER_REF: 20248550bbe014805460d4fa22ea69f146d338a0
-  SIDESIGN_REF: df2b8e4257454f0c7629276d409d6e9d7953fdf6
+  EMBEDDED_SIDESTORE_REF: ff25922e5c13ccfafd83bda5092910d848ebd409
+  MINIMUXER_REF: 98c3c79982f813878e922ab42f9545314a700f0c
+  SIDESIGN_REF: a731c0d5a9a6617c7b385ae493e07ffb7f81cd5d
   SIDESIGN_GSA_FIX: 35993d7f68950ce00d6bf1fd0fbcaa7bef51dc9c
   IDEVICE_REF: ebd7dadfc55d1c4facee3d11ecf5b28e20548b57
   JKTCP_REF: e674e1eee6d5943e13b1eba0bd24a9dd0b2fa020
@@ -159,7 +159,7 @@ jobs:
                   if u != t:
                       path.write_text(u, encoding="utf-8")
                       changed += 1
-          print(f"adapted LiveContainer pin in {changed} builder files; SideStore pin remains NRG 0.7.0 baseline")
+          print(f"adapted LiveContainer pin in {changed} builder files; SideStore stays NRG v3.1.0 pin")
           PY
 
       - name: Install source-revision compatibility git shim
