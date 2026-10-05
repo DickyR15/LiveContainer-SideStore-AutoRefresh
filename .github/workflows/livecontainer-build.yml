@@ -119,6 +119,35 @@ jobs:
         with:
           xcode-version: "26.4"
 
+      - name: Adapt NRG builder pins to 20260918 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          replacements = {
+              "12377cf3b91d51739a33f14a302e5f522b238593": "4dbe0f9a626de801184a42c0be8d2cb105058e3d",
+              "ff25922e5c13ccfafd83bda5092910d848ebd409": "12a496ca1c766a102193634879823d16610bf1cd",
+              "d57586ff506199ecfa8b78048930da821e5237de": "20248550bbe014805460d4fa22ea69f146d338a0",
+              "a731c0d5a9a6617c7b385ae493e07ffb7f81cd5d": "df2b8e4257454f0c7629276d409d6e9d7953fdf6",
+          }
+          roots = [Path("builder/tests"), Path("builder/scripts"), Path("builder/.github/workflows")]
+          suffixes = {".py", ".yml", ".yaml"}
+          changed = 0
+          for root in roots:
+              for path in root.rglob("*"):
+                  if not path.is_file() or path.suffix not in suffixes:
+                      continue
+                  text = path.read_text(encoding="utf-8")
+                  updated = text
+                  for old, new in replacements.items():
+                      updated = updated.replace(old, new)
+                  if updated != text:
+                      path.write_text(updated, encoding="utf-8")
+                      changed += 1
+          print(f"adapted NRG builder pin references in {changed} files")
+          PY
+
       - name: Run repository checks before patches
         env:
           LIVE_CONTAINER_TEST_SOURCE: ${{ github.workspace }}/work/LiveContainer
