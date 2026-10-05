@@ -2,6 +2,8 @@ name: LiveContainer Nightly 20260918 + SideStore AutoRefresh build
 
 on:
   workflow_dispatch:
+  push:
+    branches: [fix/source-build-test]
 
 permissions:
   contents: read
@@ -359,7 +361,7 @@ jobs:
             --output artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa 2>&1 | tee artifacts/logs/combined-packaging.log
           python3 builder/scripts/patch_combined_refresh_contract.py --verify-ipa artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa \
             2>&1 | tee artifacts/logs/runtime-contract-verification.log
-          printf 'builder_repository=NRG-Wardog/sidestore-auto-refresh\nbuilder_commit=%s\nbuilder_baseline=%s\n' "$BUILDER_REF" "$UNIFIED_RELEASE_BASELINE" > artifacts/builder-commit.txt
+          printf 'builder_repository=NRG-Wardog/sidestore-auto-refresh\nbuilder_commit=%s\nbuilder_baseline=%s\n' "$BUILDER_REF" "$BASELINE" > artifacts/builder-commit.txt
           python3 builder/scripts/combined_build_evidence.py collect --product v3.0.3-rc \
             --ipa artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa --output artifacts/debug-evidence --source work/LiveContainer --side-source work/EmbeddedSideStore \
             "$RUNNER_TEMP/livecontainer-derived-data/Build/Products/Release-iphoneos" \
@@ -439,7 +441,7 @@ jobs:
       - name: Download uploaded source and symbol evidence
         uses: actions/download-artifact@v4
         with:
-          name: combined-v3-debug-evidence
+          name: combined-nightly-20260918-debug-evidence
           path: artifacts/downloaded-debug-evidence
 
       - name: Verify the actual uploaded candidate and evidence
