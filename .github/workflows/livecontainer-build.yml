@@ -61,8 +61,8 @@ jobs:
       - name: Checkout pinned LiveContainer litehook
         uses: actions/checkout@v4
         with:
-          repository: LiveContainer/litehook
-          ref: a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9
+          repository: opa334/litehook
+          ref: 30a262515ee9afc3737d6e8e65052e636d18fe63
           path: work/LiveContainer/litehook
           fetch-depth: 1
           submodules: false
@@ -128,14 +128,14 @@ jobs:
           set -euo pipefail
           test "$(git -C work/LiveContainer rev-parse HEAD)" = "$LIVE_CONTAINER_REF"
           test "$(git -C work/LiveContainer/OpenSSL rev-parse HEAD)" = "623c84da314e85363236507ca38a4bde65df21c3"
-          test "$(git -C work/LiveContainer/litehook rev-parse HEAD)" = "a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9"
+          test "$(git -C work/LiveContainer/litehook rev-parse HEAD)" = "30a262515ee9afc3737d6e8e65052e636d18fe63"
           test "$(git -C work/EmbeddedSideStore rev-parse HEAD)" = "$EMBEDDED_SIDESTORE_REF"
           test "$(git -C work/EmbeddedSideStore/Dependencies/minimuxer rev-parse HEAD)" = "$MINIMUXER_REF"
           test "$(git -C work/EmbeddedSideStore/Dependencies/SideSign rev-parse HEAD)" = "$SIDESIGN_REF"
           git -C work/EmbeddedSideStore/Dependencies/SideSign merge-base --is-ancestor "$SIDESIGN_GSA_FIX" HEAD
           printf 'livecontainer=%s\nsidestore=%s\nminimuxer=%s\nsidesign=%s\nlitehook=%s\ngsa_fix=%s\n' \
             "$LIVE_CONTAINER_REF" "$EMBEDDED_SIDESTORE_REF" "$MINIMUXER_REF" "$SIDESIGN_REF" \
-            "a7e9f599d7f0b3d77008ad62bf10cb10dab6eca9" "$SIDESIGN_GSA_FIX" \
+            "30a262515ee9afc3737d6e8e65052e636d18fe63" "$SIDESIGN_GSA_FIX" \
             | tee artifacts/logs/upstream-auth-provenance.txt
           test "$(git -C idevice rev-parse HEAD)" = "$IDEVICE_REF"
           test "$(git -C jktcp rev-parse HEAD)" = "$JKTCP_REF"
