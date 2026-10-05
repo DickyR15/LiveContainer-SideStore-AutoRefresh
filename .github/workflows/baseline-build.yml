@@ -1,0 +1,85 @@
+name: Build Unified v3.1.0 baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unified-v3.1.0-baseline-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RELEASE_URL: https://github.com/NRG-Wardog/sidestore-auto-refresh/releases/download/v3.1.0/LiveContainer-SideStore-v3.1.0.ipa
+  EXPECTED_SHA256: 2337e08a71b2af4fee930b59ccd28522563acd81e908069e56f6d27d1636daf4
+  BASELINE_RELEASE: v3.1.0
+
+jobs:
+  baseline:
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - name: Prepare
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          echo "run=$GITHUB_RUN_NUMBER" > artifacts/build-info.txt
+
+      - name: Download verified Unified v3.1.0 IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="artifacts/LiveContainer-SideStore-AutoRefresh-v3.1.0-build${GITHUB_RUN_NUMBER}.ipa"
+          curl --fail --location --retry 5 --retry-delay 2 "$RELEASE_URL" --output "$FILE"
+          echo "${EXPECTED_SHA256}  $FILE" | shasum -a 256 -c -
+          shasum -a 256 "$FILE" > artifacts/SHA256SUMS
+
+      - name: Verify package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, plistlib, zipfile
+          from pathlib import Path
+
+          ipa = next(Path("artifacts").glob("LiveContainer-SideStore-AutoRefresh-v3.1.0-build*.ipa"))
+          with zipfile.ZipFile(ipa) as z:
+              lc = plistlib.loads(z.read("Payload/LiveContainer.app/Info.plist"))
+              ss = plistlib.loads(z.read("Payload/LiveContainer.app/Frameworks/SideStoreApp.framework/Info.plist"))
+
+          result = {
+              "release": "v3.1.0",
+              "source_release": "NRG-Wardog/sidestore-auto-refresh v3.1.0",
+              "ipa": ipa.name,
+              "sha256": hashlib.sha256(ipa.read_bytes()).hexdigest(),
+              "livecontainer_version": lc.get("CFBundleShortVersionString"),
+              "livecontainer_build": lc.get("CFBundleVersion"),
+              "sidestore_version": ss.get("CFBundleShortVersionString"),
+              "sidestore_build": ss.get("CFBundleVersion"),
+              "livecontainer_bundle": lc.get("CFBundleIdentifier"),
+              "sidestore_bundle": ss.get("CFBundleIdentifier"),
+          }
+          assert result["sha256"] == "2337e08a71b2af4fee930b59ccd28522563acd81e908069e56f6d27d1636daf4
+          assert result["livecontainer_version"] == "3.8.9"
+          assert result["sidestore_version"] == "0.7.0"
+          assert result["sidestore_build"] == "0700"
+          Path("artifacts/package-verification.json").write_text(
+              json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+          )
+          print(json.dumps(result, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Upload v3.1.0 baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveContainer-SideStore-AutoRefresh-v3.1.0-build${{ github.run_number }}
+          path: |
+            artifacts/LiveContainer-SideStore-AutoRefresh-v3.1.0-build${{ github.run_number }}.ipa
+            artifacts/SHA256SUMS
+            artifacts/package-verification.json
+            artifacts/build-info.txt
+          if-no-files-found: error
+          retention-days: 30
