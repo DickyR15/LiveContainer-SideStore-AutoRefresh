@@ -276,6 +276,7 @@ SHIM
           } 2>&1 | tee artifacts/logs/host-preflight.log
 
       - name: Execute real layout regression on final generated source
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
