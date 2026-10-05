@@ -54,10 +54,21 @@ def main() -> None:
     text = headless_app_manager_persisted_error_privacy(text)
     marker = "V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1"
     pairing_marker = "V3_TYPED_PAIRING_FAILURE_PROPAGATION_V1"
+    pipeline = """return PipelineHandler(
+            isResignActive: presentingViewController is ResignAltStoreViewController,
+            presenterProvider: { [weak presentingViewController] in
+                presentingViewController?.presentedViewController ?? presentingViewController
+            }
+        )"""
+    # Newer SideStore removed the old AppManager sign-in/deactivate wrappers,
+    # but retained one presenter-aware PipelineHandler factory for normal UI
+    # operations. The embedded service must use the presenter-free handler.
     if (
         "func signIn(presentingViewController: UIViewController?," not in text
         and "func deactivateApps(for appBundle: ALTApplication" not in text
     ):
+        if pipeline in text:
+            text = text.replace(pipeline, "return PipelineHandler()", 1)
         if marker not in text:
             text += "\\n// " + marker + ": current SideStore AppManager no longer owns sign-in UI.\\n"
             text += "// " + pairing_marker + ": current AppManager has no legacy sign-in UI wrapper.\\n"
