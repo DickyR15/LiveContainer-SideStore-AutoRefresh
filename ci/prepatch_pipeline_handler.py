@@ -144,7 +144,13 @@ def main() -> None:
     )
     remaining = [item for item in forbidden if item in text]
     if remaining:
-        raise SystemExit("pipeline prepatch: forbidden headless UI tokens remain: " + ", ".join(remaining))
+        details = []
+        lines = text.splitlines()
+        for item in remaining:
+            for number, line in enumerate(lines, 1):
+                if item in line:
+                    details.append(f"{item}@{number}: {line.strip()}")
+        raise SystemExit("pipeline prepatch: forbidden headless UI tokens remain: " + "; ".join(details))
 
     path.write_text(text, encoding="utf-8")
     print("PipelineHandler prepatch applied and verified")
