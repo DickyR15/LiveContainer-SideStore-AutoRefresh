@@ -137,39 +137,17 @@ def main() -> None:
         "    }"
     )
 
-    # Newer SideStore adds three more presenter-backed customization methods at the
-    # tail of PipelineHandler. Keep protocol-compatible headless defaults and drop
-    # the private image-picker helper, which is only used by that UI path.
-    tail_start = "\n    func resolveAppGroupMismatch(";
-    tail_end_marker = "\n}";
-    if tail_start not in text:
-        raise SystemExit("pipeline prepatch: AppGroup customization tail anchor changed")
-    start = text.index(tail_start)
-    end = text.find(tail_end_marker, start)
-    if end < 0:
-        raise SystemExit("pipeline prepatch: PipelineHandler class closing brace not found")
-
-    tail_replacement = (
-        "\n    @MainActor\n"
-        "    func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String) async throws -> AppGroupResolution {\n"
-        f"    // {DECISIONS}: preserve the validated corrected group without UI.\n"
-        "    return .correctAndProceed(correctedGroup)\n"
-        "    }\n\n"
-        "    @MainActor\n"
-        "    func resolveAppIconCustomization(appName: String) async throws -> URL? {\n"
-        f"    // {DECISIONS}: the embedded service never presents icon pickers.\n"
-        "    return nil\n"
-        "    }\n\n"
-        "    @MainActor\n"
-        "    func resolveProvisioningProfileCustomization(appName: String, bundleID: String) async throws -> ProfileCustomizationChoice? {\n"
-        f"    // {DECISIONS}: use the automatic profile without a UI choice.\n"
-        "    return .defaultProfile\n"
-        "    }\n"
+    # Current SideStore also exposes icon and provisioning-profile customization UI.
+    text = replace_function(
+        text,
+        "    func resolveAppIconCustomization(appName: String) async throws -> URL?",
+        f"    func resolveAppIconCustomization(appName: String) async throws -> URL? {{\n    // {DECISIONS}: the embedded service never presents icon pickers.\n    return nil\n}}",
     )
-    text = text[:start] + tail_replacement + text[end:]
-    helper_start = text.find("\n\nprivate final class ImagePickerDelegateHandler")
-    if helper_start >= 0:
-        text = text[:helper_start] + "\n";
+    text = replace_function(
+        text,
+        "    func resolveProvisioningProfileCustomization(appName: String, bundleID: String) async throws -> ProfileCustomizationChoice?",
+        f"    func resolveProvisioningProfileCustomization(appName: String, bundleID: String) async throws -> ProfileCustomizationChoice? {{\n    // {DECISIONS}: use the automatic profile without a UI choice.\n    return .defaultProfile\n}}",
+    )
     forbidden = (
         "presenterProvider", "activePresenter", "isPresenterAvailable",
         "isResignActive:", "UIAlertController", "ReviewPermissionsViewController",
