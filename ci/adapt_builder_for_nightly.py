@@ -39,6 +39,17 @@ def main() -> None:
 
     service = ROOT / "patch_v3_service.py"
     text = service.read_text(encoding="utf-8")
+    # Newer source formatting can differ while preserving the same headless contract.
+    # Relax only the builder's declaration equality check to whitespace-normalized equality.
+    strict = """            if declaration(text, signature) != replacement:
+                raise SystemExit("v3 service: headless PipelineHandler UI decisions drifted")
+"""
+    relaxed = """            if re.sub(r"\\s+", " ", declaration(text, signature)).strip() != re.sub(r"\\s+", " ", replacement).strip():
+                raise SystemExit("v3 service: headless PipelineHandler UI decisions drifted")
+"""
+    if strict not in text:
+        raise SystemExit("v3 service: PipelineHandler declaration guard changed")
+    text = text.replace(strict, relaxed, 1)
     old = '    ) {\\n        self.session = nil\\n'
     new = '    ) async {\\n        self.session = nil\\n'
     if old in text:
