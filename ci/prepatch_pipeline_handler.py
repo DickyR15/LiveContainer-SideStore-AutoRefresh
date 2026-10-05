@@ -12,16 +12,18 @@ def replace_function(source: str, signature: str, replacement: str) -> str:
     if source.count(signature) != 1:
         raise SystemExit(f"pipeline prepatch: expected one {signature!r}, found {source.count(signature)}")
     start = source.index(signature)
-    brace = source.index("{", start)
-    depth = 0
-    for i in range(brace, len(source)):
-        if source[i] == "{":
-            depth += 1
-        elif source[i] == "}":
-            depth -= 1
-            if depth == 0:
-                return source[:start] + replacement + source[i + 1:]
-    raise SystemExit(f"pipeline prepatch: unbalanced {signature!r}")
+    next_func = re.search(
+        r"(?m)^    (?:@MainActor\\n    )?(?:func|private func|public func) ",
+        source[start + len(signature):],
+    )
+    if next_func:
+        end = start + len(signature) + next_func.start()
+        return source[:start] + replacement + source[end:]
+    class_end = re.search(r"(?m)^}\\s*$", source[start:])
+    if class_end:
+        end = start + class_end.start()
+        return source[:start] + replacement + source[end:]
+    raise SystemExit(f"pipeline prepatch: could not locate end of {signature!r}")
 
 def main() -> None:
     if len(sys.argv) != 2:
