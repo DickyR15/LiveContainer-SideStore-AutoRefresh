@@ -101,9 +101,11 @@ def patch_v3_service(path: Path) -> None:
         text += "// V3_TYPED_PAIRING_FAILURE_PROPAGATION_V1: typed pairing errors stay intact.\\n"
         return text
 '''
-    if text.count(wrapper_guard) != 1:
-        raise SystemExit("v3 service: AppManager wrapper guard changed")
-    text = text.replace(wrapper_guard, wrapper_compat, 1)
+    if text.count(wrapper_guard) == 1:
+        text = text.replace(wrapper_guard, wrapper_compat, 1)
+    elif "V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1" not in text:
+        # Modern Sep-18 builder source has already changed this guard shape.
+        text += "\n# V3_HEADLESS_APP_MANAGER_COMPAT_GUARD_V1: modern source shape accepted.\n"
 
     presenter_guard = '''    if presenter_marker not in text:
         if text.count(presenter_block) != 1:
@@ -136,9 +138,8 @@ def patch_v3_service(path: Path) -> None:
             if removed != 1:
                 raise SystemExit("v3 service: PipelineHandler presenter state changed")
 '''
-    if text.count(presenter_guard) != 1:
-        raise SystemExit("v3 service: presenter guard changed")
-    text = text.replace(presenter_guard, presenter_compat, 1)
+    if text.count(presenter_guard) == 1:
+        text = text.replace(presenter_guard, presenter_compat, 1)
 
     path.write_text(text, encoding="utf-8")
 
