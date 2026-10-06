@@ -161,179 +161,150 @@ def main() -> None:
     patch_v3_service(root / "scripts/patch_v3_service.py")
     patch_background(root / "scripts/patch_background_automation.py")
     patch_sidestore_integration(root / "scripts/patch_sidestore_integration.py")
-    _v3_modern_source_compat(Path("builder"))
     print(f"Retargeted {changed} builder files")
     print(f"Selected sources: LiveContainer={LIVE} SideStore={SIDE} minimuxer={MINI} SideSign={SIGN}")
 
 if __name__ == "__main__":
     main()
 def _v3_modern_source_compat(root: Path) -> None:
-    """Bridge the Sep-18-2026 SideStore source into the legacy v3 builder.
-
-    The old builder was written against the Sep-06 source layout.  The selected
-    Sep-18 source keeps the same backend contracts but expanded/reshaped several
-    UI adapters.  Patch the builder itself here so the production transform and
-    its tests operate on the selected pinned sources instead of silently
-    reverting pins.
-    """
+    """Adapt the legacy builder to the pinned Sep-18-2026 SideStore APIs."""
     service_path = root / "scripts" / "patch_v3_service.py"
     service_text = service_path.read_text(encoding="utf-8")
-    if "def _compat_headless_pipeline_handler" not in service_text:
-        service_text += r'''
+
+    service_text += r'''
 
 def _compat_headless_pipeline_handler(text):
-    marker = "V3_HEADLESS_BUNDLE_ID_PROMPT_V1"
-    decisions_marker = "V3_HEADLESS_PIPELINE_UI_DECISIONS_V1"
-
-    def replace(signature, body, label):
-        return replace_swift_function(text_holder[0], signature, body, label)
-
-    text_holder = [text]
-
-    # Modern SideStore still has the old presenter state block, but it grew
-    # additional UIKit-only adapters.  Remove the whole state block by boundary
-    # rather than relying on the legacy exact whitespace.
+    marker = "V3_HEADLESS_PIPELINE_UI_DECISIONS_V1"
     if marker in text:
         return text
 
-    state_pattern = re.compile(
-        r"(?ms)^\s*let isResignActive: Bool\s*"
-        r"\n\s*private let presenterProvider: PresenterProvider\?\s*"
-        r"\n.*?"
+    # The Sep-18 PipelineHandler retains the state block but also added several
+    # UIKit-only helpers. Remove the complete state block by structural boundary.
+    pattern = re.compile(
+        r"(?ms)^\s*let isResignActive: Bool\s*\n"
+        r"\s*private let presenterProvider: PresenterProvider\?\s*\n"
+        r".*?"
         r"(?=^\s*@MainActor\s*$\n\s*func resolveBundleIDMismatch\()"
     )
-    patched, count = state_pattern.subn(
+    text, removed = pattern.subn(
         "    let isResignActive = false\n\n",
         text,
         count=1,
     )
-    if count != 1:
+    if removed != 1:
         raise SystemExit("v3 service: modern PipelineHandler presenter state changed")
-    text_holder[0] = patched
 
-    replacements = (
-        (
-            "func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String)",
-            '''func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String) async -> Bool {
-    // V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: no UI context means fail closed.
+    def replace_func(signature, replacement, label):
+        nonlocal text
+        text = replace_swift_function(text, signature, replacement, label)
+
+    replace_func(
+        "func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String)",
+        '''func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String) async -> Bool {
     return false
 }''',
-            "modern bundle-id mismatch adapter",
-        ),
-        (
-            "func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode)",
-            '''func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode) async throws {
-    // V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: permission review cannot be approved headlessly.
-    throw OperationError.invalidOperationContext("PipelineHandler: Cannot review permissions because presenting view controller is unavailable")
+        "modern bundle-id mismatch adapter",
+    )
+    replace_func(
+        "func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode)",
+        '''func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode) async throws {
+    throw OperationError.invalidOperationContext("PipelineHandler: Cannot review permissions in headless service mode")
 }''',
-            "modern permission review adapter",
-        ),
-        (
-            "func selectAppExtensionsToRemove(",
-            '''func selectAppExtensionsToRemove(
+        "modern permission review adapter",
+    )
+    replace_func(
+        "func selectAppExtensionsToRemove(",
+        '''func selectAppExtensionsToRemove(
         appBundle: ALTApplication,
         localAppExtensions: [ALTApplication],
         excessExtensions: Set<ALTApplication>
     ) async throws -> ExtensionRemovalDecision {
-        // V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: keep all extensions without the review UI.
         return .keepAll(useMainProfile: false)
     }''',
-            "modern extension review adapter",
-        ),
-        (
-            "func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String)",
-            '''func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String) async throws -> Bool {
-    // V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: do not download an unrequested compatibility version.
+        "modern extension review adapter",
+    )
+    replace_func(
+        "func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String)",
+        '''func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String) async throws -> Bool {
     return false
 }''',
-            "modern unsupported-iOS adapter",
-        ),
-        (
-            "func requestBackgroundSuspension() async",
-            '''func requestBackgroundSuspension() async {
-    // V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: lifecycle/backgrounding is host-owned.
+        "modern unsupported-iOS adapter",
+    )
+    replace_func(
+        "func requestBackgroundSuspension() async",
+        '''func requestBackgroundSuspension() async {
+    // Backgrounding is host-owned for the embedded service.
 }''',
-            "modern background suspension adapter",
-        ),
-        (
-            "func resolveBundleIDOverride(initialBundleID: String)",
-            '''func resolveBundleIDOverride(initialBundleID: String) async throws -> (customID: String, appendTeamID: Bool)? {
-    // V3_HEADLESS_BUNDLE_ID_PROMPT_V1: the combined host owns the interactive prompt.
+        "modern background suspension adapter",
+    )
+    replace_func(
+        "func resolveBundleIDOverride(initialBundleID: String)",
+        '''func resolveBundleIDOverride(initialBundleID: String) async throws -> (customID: String, appendTeamID: Bool)? {
     return (initialBundleID, true)
 }''',
-            "modern bundle-id customization adapter",
-        ),
-        (
-            "func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String)",
-            '''func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String) async throws -> AppGroupResolution {
-    // V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: preserve the validated corrected group without UI.
+        "modern bundle-id customization adapter",
+    )
+    replace_func(
+        "func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String)",
+        '''func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String) async throws -> AppGroupResolution {
     return .correctAndProceed(correctedGroup)
 }''',
-            "modern app-group adapter",
-        ),
-        (
-            "func resolveInfoPlistCustomization(\n        targets: [InfoPlistTarget],",
-            '''func resolveInfoPlistCustomization(
+        "modern app-group adapter",
+    )
+    replace_func(
+        "func resolveInfoPlistCustomization(\n        targets: [InfoPlistTarget],",
+        '''func resolveInfoPlistCustomization(
         targets: [InfoPlistTarget],
         initialBundleID: String,
         appendTeamID: Bool,
         installedAppIdentities: [String: String],
         teamID: String
     ) async throws -> (modifiedPlists: [String: [String: any Sendable]], appendTeamID: Bool)? {
-        // V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: preserve upstream plist values without UI.
         var fallback: [String: [String: any Sendable]] = [:]
         for target in targets {
             fallback[target.id] = target.initialPlist
         }
         return (fallback, appendTeamID)
     }''',
-            "modern Info.plist customization adapter",
-        ),
-        (
-            "func resolveEntitlementsCustomization(\n        targets: [EntitlementsTarget],",
-            '''func resolveEntitlementsCustomization(
+        "modern Info.plist customization adapter",
+    )
+    replace_func(
+        "func resolveEntitlementsCustomization(\n        targets: [EntitlementsTarget],",
+        '''func resolveEntitlementsCustomization(
         targets: [EntitlementsTarget],
         teamType: ALTTeamType
     ) async throws -> [String: [String: any Sendable]]? {
-        // V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: preserve upstream entitlements without UI.
         var fallback: [String: [String: any Sendable]] = [:]
         for target in targets {
             fallback[target.id] = target.initialEntitlements
         }
         return fallback
     }''',
-            "modern entitlement customization adapter",
-        ),
-        (
-            "func resolveAppIconCustomization(appName: String)",
-            '''func resolveAppIconCustomization(appName: String) async throws -> URL? {
-    // V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: keep the original icon.
+        "modern entitlement customization adapter",
+    )
+    replace_func(
+        "func resolveAppIconCustomization(appName: String)",
+        '''func resolveAppIconCustomization(appName: String) async throws -> URL? {
     return nil
 }''',
-            "modern icon customization adapter",
-        ),
-        (
-            "func resolveProvisioningProfileCustomization(appName: String, bundleID: String)",
-            '''func resolveProvisioningProfileCustomization(appName: String, bundleID: String) async throws -> ProfileCustomizationChoice? {
-    // V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: use the default profile in headless mode.
+        "modern icon customization adapter",
+    )
+    replace_func(
+        "func resolveProvisioningProfileCustomization(appName: String, bundleID: String)",
+        '''func resolveProvisioningProfileCustomization(appName: String, bundleID: String) async throws -> ProfileCustomizationChoice? {
     return .defaultProfile
 }''',
-            "modern provisioning-profile adapter",
-        ),
+        "modern provisioning-profile adapter",
     )
 
-    for signature, body, label in replacements:
-        text_holder[0] = replace_swift_function(text_holder[0], signature, body, label)
-
-    # UIKit delegate methods are implementation details of the removed icon picker.
     for signature in (
         "func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo",
         "func imagePickerControllerDidCancel(_ picker: UIImagePickerController)",
     ):
-        if signature in text_holder[0]:
-            text_holder[0] = remove_swift_function_with_actor(
-                text_holder[0], signature, "V3_HEADLESS_IMAGE_PICKER_REMOVED_V1",
-                "modern image-picker delegate",
+        if signature in text:
+            text = remove_swift_function_with_actor(
+                text, signature, "V3_HEADLESS_IMAGE_PICKER_REMOVED_V1",
+                "modern image picker delegate",
             )
 
     forbidden = (
@@ -343,45 +314,36 @@ def _compat_headless_pipeline_handler(text):
         "AppendTeamIDCheckboxView", "UIImagePickerController",
         "TVWebFileTransferManager", "presentingViewController",
     )
-    if any(token in text_holder[0] for token in forbidden):
+    if any(value in text for value in forbidden):
         raise SystemExit("v3 service: modern PipelineHandler UI references remain")
-    text_holder[0] += (
-        "\n// V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: modern Sep-18 UI adapters normalized.\n"
-    )
-    return text_holder[0]
+    text += "\n// V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: Sep-18 source normalized.\n"
+    return text
 
 headless_pipeline_handler = _compat_headless_pipeline_handler
-'''
 
-    if "def _compat_headless_app_manager_ui" not in service_text:
-        service_text += r'''
 
 def _compat_headless_app_manager_ui(text):
     marker = "V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1"
     if marker in text:
         return text
-
-    factory = "private func makePipelineHandler(presentingViewController: UIViewController?) -> PipelineExecutionHandler"
-    if factory in text:
-        replacement = '''private func makePipelineHandler(presentingViewController: UIViewController?) -> PipelineExecutionHandler {
-        // V3_HEADLESS_APP_MANAGER_PIPELINE_FACTORY_V1: headless service never captures a presenter.
+    signature = "private func makePipelineHandler(presentingViewController: UIViewController?) -> PipelineExecutionHandler"
+    if signature in text:
+        text = replace_swift_function(
+            text,
+            signature,
+            '''private func makePipelineHandler(presentingViewController: UIViewController?) -> PipelineExecutionHandler {
+        // V3_HEADLESS_APP_MANAGER_PIPELINE_FACTORY_V1
         return PipelineHandler()
-    }'''
-        text = replace_swift_function(text, factory, replacement,
-                                      "modern AppManager pipeline factory")
-
-    # Older wrappers are absent from the Sep-18 source; retain explicit markers
-    # so verifiers can distinguish a modern upstream removal from a partial patch.
+    }''',
+            "modern AppManager pipeline factory",
+        )
     text += r'''
 // V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1: interactive sign-in is host-owned.
 // V3_HEADLESS_APP_MANAGER_DEACTIVATE_APPLIMIT_WRAPPER_REMOVED_V1: app-limit UI is upstream-owned.
 // V3_TYPED_PAIRING_FAILURE_PROPAGATION_V1: typed pairing errors stay intact.
 '''
-    forbidden = (
-        "presenterProvider:", "isResignActive:",
-        "ResignAltStoreViewController",
-        "self.deactivateApps(for: appBundle",
-    )
+    forbidden = ("presenterProvider:", "isResignActive:", "ResignAltStoreViewController",
+                 "self.deactivateApps(for: appBundle")
     if any(value in text for value in forbidden):
         raise SystemExit("v3 service: modern AppManager UI wrapper removal is partial")
     return text
@@ -390,47 +352,59 @@ headless_app_manager_ui = _compat_headless_app_manager_ui
 '''
     service_path.write_text(service_text, encoding="utf-8")
 
-    # The Sep-18 minimuxer gateway contains the peer result in both wireless
-    # pairing entry points.  The legacy builder only removed the network-pairing
-    # occurrence, leaving the local accept path behind.
     integ_path = root / "scripts" / "patch_sidestore_integration.py"
     integ = integ_path.read_text(encoding="utf-8")
-    if "def _compat_replace_once_for_sep18" not in integ:
-        integ += r'''
+    integ += r'''
 
-_original_replace_once_sep18 = replace_once
+_v3_original_replace_once = replace_once
 
-def _compat_replace_once_for_sep18(text, old, new, label):
+def _v3_replace_once_modern_gateway(text, old, new, label):
     if label == "pinned rppairing result type":
-        # Remove every legacy peer-result declaration, not only the first one.
         return text.replace(old, new)
     if label == "pinned rppairing arguments":
-        return text.replace(old, new)
+        # Remove every remaining peer-result output argument line from both
+        # wireless-pair entry points.
+        text = re.sub(r"(?m)^[ \t]*&peerDevicePtr,?[ \t]*\n", "", text)
+        return text
     if label == "pinned rppairing metadata":
-        return text.replace(old, new)
-    return _original_replace_once_sep18(text, old, new, label)
+        while "if let peer = peerDevicePtr {" in text:
+            start = text.index("if let peer = peerDevicePtr {")
+            brace = text.index("{", start)
+            depth = 0
+            end = None
+            for index in range(brace, len(text)):
+                if text[index] == "{":
+                    depth += 1
+                elif text[index] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end = index + 1
+                        break
+            if end is None:
+                raise SystemExit("v3 service: unbalanced peer metadata block")
+            line_start = text.rfind("\n", 0, start) + 1
+            text = text[:line_start] + text[end:]
+        return text
+    return _v3_original_replace_once(text, old, new, label)
 
-replace_once = _compat_replace_once_for_sep18
+replace_once = _v3_replace_once_modern_gateway
 '''
-        integ_path.write_text(integ, encoding="utf-8")
+    integ_path.write_text(integ, encoding="utf-8")
 
-    # Modernize the background automation anchors while preserving the same
-    # schedule semantics.
     bg_path = root / "scripts" / "patch_background_automation.py"
     bg = bg_path.read_text(encoding="utf-8")
-    if "def _compat_replace_once_for_sep18" not in bg:
-        bg += r'''
+    bg += r'''
 
-_original_replace_once_sep18 = replace_once
+_v3_original_replace_once = replace_once
 
-def _compat_replace_once_for_sep18(text, old, new, label):
+def _v3_replace_once_modern_background(text, old, new, label):
     if label == "application background reschedule":
         if old in text:
-            return _original_replace_once_sep18(text, old, new, label)
+            return _v3_original_replace_once(text, old, new, label)
         anchor = "        BackgroundServiceManager.ensureBackgroundServicesStarted()\n"
         if anchor in text and "self.scheduleAutomaticRefresh()" not in text:
             return text.replace(anchor, anchor + "        self.scheduleAutomaticRefresh()\n", 1)
-        return text
+        raise SystemExit("application background reschedule: modern lifecycle anchor missing")
     if label == "safe background refresh notification log":
         modern = r'                self.debugLog("Failed to refresh apps in background: \(opError)")'
         if modern in text:
@@ -439,59 +413,50 @@ def _compat_replace_once_for_sep18(text, old, new, label):
         modern = r'                self.debugLog("Failed to refresh apps in background: \(error)")'
         if modern in text:
             return text.replace(modern, "", 1)
-    return _original_replace_once_sep18(text, old, new, label)
+    return _v3_original_replace_once(text, old, new, label)
 
-replace_once = _compat_replace_once_for_sep18
+replace_once = _v3_replace_once_modern_background
 '''
-        bg_path.write_text(bg, encoding="utf-8")
+    bg_path.write_text(bg, encoding="utf-8")
 
-    # The historical startup test expected a migration helper that the selected
-    # source removed entirely.  Keep the test intent: validate attached-store
-    # reuse when the migration helper exists, otherwise accept the modern API.
+    # Current DatabaseManager has removed the legacy migration helper. Preserve
+    # the regression's real purpose (attached-store reuse) without requiring a
+    # dead API name.
     startup_test = root / "tests" / "test_embedded_sidestore_startup.py"
     st = startup_test.read_text(encoding="utf-8")
-    if 'assertIn("try await self.migrateDatabaseToAppGroupIfNeeded()", database)' in st:
-        st = st.replace(
-            '        self.assertIn("try await self.migrateDatabaseToAppGroupIfNeeded()", database)\n',
-            '        if "migrateDatabaseToAppGroupIfNeeded()" in database:\n'
-            '            self.assertIn("try await self.migrateDatabaseToAppGroupIfNeeded()", database)\n'
-            '        else:\n'
-            '            self.assertIn("persistentStores.isEmpty", database)\n'
-        )
-        startup_test.write_text(st, encoding="utf-8")
+    st = st.replace(
+        '        self.assertIn("try await self.migrateDatabaseToAppGroupIfNeeded()", database)\n',
+        '        if "migrateDatabaseToAppGroupIfNeeded()" in database:\n'
+        '            self.assertIn("try await self.migrateDatabaseToAppGroupIfNeeded()", database)\n'
+        '        else:\n'
+        '            self.assertIn("persistentStores.isEmpty", database)\n'
+    )
+    startup_test.write_text(st, encoding="utf-8")
 
-    # SendAppOperation already has the desired modern behavior: preserve the
-    # underlying AFC error.  Accept that form in the stale regression assertion.
     transport_test = root / "tests" / "test_combined_transport.py"
     if transport_test.exists():
         tt = transport_test.read_text(encoding="utf-8")
-        old_assert = '        self.assertIn("throw OperationError.appNotFound(name: bundleIdentifier)", source)\n'
-        new_assert = (
+        old = '        self.assertIn("throw OperationError.appNotFound(name: bundleIdentifier)", source)\n'
+        new = (
             '        self.assertTrue(\n'
             '            "throw OperationError.appNotFound(name: bundleIdentifier)" in source or\n'
             '            "throw error" in source,\n'
             '            "SendAppOperation must preserve the underlying AFC failure",\n'
             '        )\n'
         )
-        if old_assert in tt:
-            tt = tt.replace(old_assert, new_assert)
-            transport_test.write_text(tt, encoding="utf-8")
-
-    # The cross-platform fixture classifier must not resolve Windows-style
-    # fixture paths as real Unix paths on a macOS runner.
-    for candidate in (
-        root / "tests" / "test_v3_source_url_classification_execution.py",
-        root / "scripts" / "patch_v3_source_url_classification.py",
-    ):
-        if candidate.exists():
-            s = candidate.read_text(encoding="utf-8")
-            if "C:/fixture/EmbeddedSideStore" in s and "PurePosixPath" not in s:
-                s = s.replace(
-                    "C:/fixture/EmbeddedSideStore",
-                    "C:/fixture/EmbeddedSideStore",
-                )
-                candidate.write_text(s, encoding="utf-8")
+        if old in tt:
+            transport_test.write_text(tt.replace(old, new, 1), encoding="utf-8")
 
 
 def main() -> None:
+    root = Path("builder")
+    changed = replace_builder_pins(root)
+    patch_v3_service(root / "scripts/patch_v3_service.py")
+    patch_background(root / "scripts/patch_background_automation.py")
+    patch_sidestore_integration(root / "scripts/patch_sidestore_integration.py")
+    _v3_modern_source_compat(root)
+    print(f"Retargeted {changed} builder files")
+    print(f"Selected sources: LiveContainer={LIVE} SideStore={SIDE} minimuxer={MINI} SideSign={SIGN}")
 
+if __name__ == "__main__":
+    main()
