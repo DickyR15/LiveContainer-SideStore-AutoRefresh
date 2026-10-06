@@ -161,9 +161,6 @@ def main() -> None:
     print(f"Retargeted {changed} builder files")
     print(f"Selected sources: LiveContainer={LIVE} SideStore={SIDE} minimuxer={MINI} SideSign={SIGN}")
 
-if __name__ == "__main__":
-    main()
-
 def _v3_modern_source_compat(root: Path) -> None:
     """Adapt the legacy builder to the pinned Sep-18-2026 SideStore APIs."""
     service_path = root / "scripts" / "patch_v3_service.py"
@@ -455,6 +452,9 @@ def main() -> None:
     _v3_modern_source_compat(root)
     print(f"Retargeted {changed} builder files")
     print(f"Selected sources: LiveContainer={LIVE} SideStore={SIDE} minimuxer={MINI} SideSign={SIGN}")
+
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()
