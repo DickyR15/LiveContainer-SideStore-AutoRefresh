@@ -41,7 +41,9 @@ def replace_builder_pins(root: Path) -> int:
 def patch_v3_service(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
 
-    old_signout = '''    if "v3BeginIdentityTransition()" not in text:
+    # The pinned Sep-18 source may already contain the identity-transition
+    # signOut change. Otherwise patch either the async or legacy form.
+    if "v3BeginIdentityTransition()" not in text:
         if "    ) async {\\n        self.session = nil\\n" in text:
             text = replace(text, "    ) async {\\n        self.session = nil\\n", "    ) async {\\n"
                 "        self.v3BeginIdentityTransition()\\n"
@@ -54,22 +56,7 @@ def patch_v3_service(path: Path) -> None:
                 "        self.session = nil\\n")
         else:
             raise SystemExit("v3 service: AuthManager signOut session-clear anchor changed")
-    return text
-'''
-    new_signout = '''    if "    ) async {\\n        self.session = nil\\n" in text:
-        text = replace(text, "    ) async {\\n        self.session = nil\\n", "    ) async {\\n"
-            "        self.v3BeginIdentityTransition()\\n"
-            "        defer { self.v3CompleteIdentityTransition() }\\n"
-            "        self.session = nil\\n")
-    else:
-        text = replace(text, "    ) {\\n        self.session = nil\\n", "    ) {\\n"
-            "        self.v3BeginIdentityTransition()\\n"
-            "        defer { self.v3CompleteIdentityTransition() }\\n"
-            "        self.session = nil\\n")
-'''
-    if text.count(old_signout) != 1:
-        raise SystemExit("v3 service: AuthManager signOut patch block changed")
-    text = text.replace(old_signout, new_signout, 1)
+
 
     old_skip = '        skipCertificateProvisioning: Bool = false\\n'
     new_skip = '        skipCertificateProvisioning: Bool = false,\\n'
