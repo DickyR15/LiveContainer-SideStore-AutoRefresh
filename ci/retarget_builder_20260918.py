@@ -41,10 +41,20 @@ def replace_builder_pins(root: Path) -> int:
 def patch_v3_service(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
 
-    old_signout = '''    text = replace(text, "    ) {\\n        self.session = nil\\n", "    ) {\\n"
-        "        self.v3BeginIdentityTransition()\\n"
-        "        defer { self.v3CompleteIdentityTransition() }\\n"
-        "        self.session = nil\\n")
+    old_signout = '''    if "v3BeginIdentityTransition()" not in text:
+        if "    ) async {\\n        self.session = nil\\n" in text:
+            text = replace(text, "    ) async {\\n        self.session = nil\\n", "    ) async {\\n"
+                "        self.v3BeginIdentityTransition()\\n"
+                "        defer { self.v3CompleteIdentityTransition() }\\n"
+                "        self.session = nil\\n")
+        elif "    ) {\\n        self.session = nil\\n" in text:
+            text = replace(text, "    ) {\\n        self.session = nil\\n", "    ) {\\n"
+                "        self.v3BeginIdentityTransition()\\n"
+                "        defer { self.v3CompleteIdentityTransition() }\\n"
+                "        self.session = nil\\n")
+        else:
+            raise SystemExit("v3 service: AuthManager signOut session-clear anchor changed")
+    return text
 '''
     new_signout = '''    if "    ) async {\\n        self.session = nil\\n" in text:
         text = replace(text, "    ) async {\\n        self.session = nil\\n", "    ) async {\\n"
