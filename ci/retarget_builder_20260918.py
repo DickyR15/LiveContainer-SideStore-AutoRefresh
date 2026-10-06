@@ -177,9 +177,17 @@ def patch_sidestore_integration(path: Path) -> None:
         die(f"{label}: expected one anchor, found {count}")
     return text.replace(old, new, 1)
 '''
-    if text.count(old) != 1:
-        raise SystemExit("sidestore integration: replace_once helper changed")
-    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+    if text.count(old) == 1:
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+    elif "def replace_once" in text and all(label in text for label in (
+        "pinned rppairing result type",
+        "pinned rppairing arguments",
+        "pinned rppairing metadata",
+    )):
+        # Modern pinned integration already carries the tolerant helper.
+        return
+    else:
+        raise SystemExit("sidestore integration: replace_once helper shape unsupported")
 
 def main() -> None:
     root = Path("builder")
