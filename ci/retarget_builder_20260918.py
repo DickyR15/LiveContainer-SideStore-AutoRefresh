@@ -155,6 +155,7 @@ def patch_sidestore_integration(path: Path) -> None:
 def main() -> None:
     root = Path("builder")
     changed = replace_builder_pins(root)
+    _v3_modern_source_compat(root)
     patch_v3_service(root / "scripts/patch_v3_service.py")
     patch_background(root / "scripts/patch_background_automation.py")
     patch_sidestore_integration(root / "scripts/patch_sidestore_integration.py")
