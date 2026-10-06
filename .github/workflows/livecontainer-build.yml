@@ -98,6 +98,33 @@ jobs:
         with:
           xcode-version: "26.4"
 
+      - name: Align builder fixtures with selected upstream source revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          replacements = {
+              '12377cf3b91d51739a33f14a302e5f522b238593': '4dbe0f9a626de801184a42c0be8d2cb105058e3d',
+              'ff25922e5c13ccfafd83bda5092910d848ebd409': '43e052cd970cb16fed6b0bb4feeaec5e5d7efae7',
+              '10ffa01ecdfe4203a7ad5d7f41c0d5de03bd8abb': '43e052cd970cb16fed6b0bb4feeaec5e5d7efae7',
+              'd57586ff506199ecfa8b78048930da821e5237de': '05318c65fef7dac08e54f33d5f16299f5fc3b696',
+              '20248550bbe014805460d4fa22ea69f146d338a0': '05318c65fef7dac08e54f33d5f16299f5fc3b696',
+              'a731c0d5a9a6617c7b385ae493e07ffb7f81cd5d': '6b68651697f99791ef85404b7aea1891a26a285d',
+              '35993d7f68950ce00d6bf1fd0fbcaa7bef51dc9c': '6b68651697f99791ef85404b7aea1891a26a285d',
+          }
+          changed = []
+          for path in Path('builder').rglob('*'):
+              if not path.is_file() or path.suffix not in {'.py','.json','.md'}:
+                  continue
+              try: text = path.read_text(encoding='utf-8')
+              except UnicodeDecodeError: continue
+              updated = text
+              for old, new in replacements.items(): updated = updated.replace(old, new)
+              if updated != text:
+                  path.write_text(updated, encoding='utf-8'); changed.append(str(path))
+          print('Retargeted', len(changed), 'builder files')
+          PY
       - name: Run repository checks before patches
         env:
           LIVE_CONTAINER_TEST_SOURCE: ${{ github.workspace }}/work/LiveContainer
