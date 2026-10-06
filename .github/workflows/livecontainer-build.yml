@@ -125,6 +125,22 @@ jobs:
                   path.write_text(updated, encoding='utf-8'); changed.append(str(path))
           print('Retargeted', len(changed), 'builder files')
           PY
+      - name: Apply focused 20260918 builder compatibility adapters
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --silent --show-error \
+            https://raw.githubusercontent.com/DickyR15/LiveContainer-SideStore-AutoRefresh/nightly-20260918-upstream-latest/ci/retarget_builder_20260918.py \
+            -o /tmp/retarget_builder_20260918.py
+          python3 /tmp/retarget_builder_20260918.py
+          python3 -m py_compile builder/scripts/patch_v3_service.py builder/scripts/patch_background_automation.py builder/scripts/patch_sidestore_integration.py
+          test "$(python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'builder/scripts')
+          import patch_v3_service
+          print(patch_v3_service.PINS[1])
+          PY
+          )" = "$EMBEDDED_SIDESTORE_REF"
       - name: Run repository checks before patches
         env:
           LIVE_CONTAINER_TEST_SOURCE: ${{ github.workspace }}/work/LiveContainer
