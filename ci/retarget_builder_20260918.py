@@ -63,6 +63,34 @@ def patch_v3_service(path: Path) -> None:
     if old_skip in text:
         text = text.replace(old_skip, new_skip, 1)
 
+    modern_app_manager_factory = "    private func makePipelineHandler(presentingViewController: UIViewController?) -> PipelineExecutionHandler"
+    if modern_app_manager_factory in text and "V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1" not in text:
+        old_factory = (
+            "    private func makePipelineHandler(presentingViewController: UIViewController?) -> PipelineExecutionHandler\n"
+            "    {\n"
+            "        return PipelineHandler(\n"
+            "            isResignActive: presentingViewController is ResignAltStoreViewController,\n"
+            "            presenterProvider: { [weak presentingViewController] in\n"
+            "                presentingViewController?.presentedViewController ?? presentingViewController\n"
+            "            }\n"
+            "        )\n"
+            "    }"
+        )
+        new_factory = (
+            "    private func makePipelineHandler(presentingViewController: UIViewController?) -> PipelineExecutionHandler\n"
+            "    {\n"
+            "        // V3_HEADLESS_APP_MANAGER_PIPELINE_FACTORY_V1\n"
+            "        return PipelineHandler()\n"
+            "    }"
+        )
+        if old_factory not in text:
+            raise SystemExit("v3 service: modern AppManager pipeline factory shape changed")
+        text = text.replace(old_factory, new_factory, 1)
+        text += "\n// V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1: interactive sign-in is host-owned.\n"
+        text += "// V3_HEADLESS_APP_MANAGER_DEACTIVATE_APPLIMIT_WRAPPER_REMOVED_V1: app-limit UI is upstream-owned.\n"
+        text += "// V3_TYPED_PAIRING_FAILURE_PROPAGATION_V1: typed pairing errors stay intact.\n"
+        return text
+
     wrapper_guard = '''    if text.count(start_marker) != 1 or text.count(end_marker) != 1:
         raise SystemExit("v3 service: AppManager UIKit sign-in wrapper changed")
 '''
