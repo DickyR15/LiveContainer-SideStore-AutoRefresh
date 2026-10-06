@@ -1,7 +1,10 @@
-name: LiveContainer Nightly 20260918 + SideStore AutoRefresh build
+name: Unified LiveContainer + SideStore v3.1.0 — Nightly Release @ 20260918
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - nightly-20260918-upstream-latest
 
 permissions:
   contents: read
@@ -12,11 +15,11 @@ concurrency:
 
 env:
   LIVE_CONTAINER_REF: 4dbe0f9a626de801184a42c0be8d2cb105058e3d
-  EMBEDDED_SIDESTORE_REF: 12a496ca1c766a102193634879823d16610bf1cd
-  MINIMUXER_REF: 20248550bbe014805460d4fa22ea69f146d338a0
-  SIDESIGN_REF: df2b8e4257454f0c7629276d409d6e9d7953fdf6
-  SIDESIGN_GSA_FIX: 35993d7f68950ce00d6bf1fd0fbcaa7bef51dc9c
-  IDEVICE_REF: ebd7dadfc55d1c4facee3d11ecf5b28e20548b57
+  EMBEDDED_SIDESTORE_REF: 43e052cd970cb16fed6b0bb4feeaec5e5d7efae7
+  MINIMUXER_REF: 05318c65fef7dac08e54f33d5f16299f5fc3b696
+  SIDESIGN_REF: 6b68651697f99791ef85404b7aea1891a26a285d
+  SIDESIGN_GSA_FIX: 6b68651697f99791ef85404b7aea1891a26a285d
+  IDEVICE_REF: f34cfd3953bbd9ee54c81cf600011a35205a098b
   JKTCP_REF: e674e1eee6d5943e13b1eba0bd24a9dd0b2fa020
   BASELINE: nightly-20260918
   BUILDER_REF: 651587433eb7142089509e558dcfba9eb69d0470
@@ -47,7 +50,7 @@ jobs:
       - name: Checkout pinned embedded SideStore sources
         uses: actions/checkout@v4
         with:
-          repository: LiveContainer/SideStore
+          repository: SideStore/SideStore
           ref: ${{ env.EMBEDDED_SIDESTORE_REF }}
           path: work/EmbeddedSideStore
           fetch-depth: 1
@@ -349,7 +352,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 builder/scripts/combined_build_evidence.py identity --product v3.0.3-rc \
+          python3 builder/scripts/combined_build_evidence.py identity --product v3.1.0 \
             "$RUNNER_TEMP/livecontainer-derived-data/Build/Products/Release-iphoneos/LiveContainer.app" \
             "$RUNNER_TEMP/embedded-sidestore-derived-data/Build/Products/Release-iphoneos/SideStore.app"
           python3 builder/scripts/package_livecontainer_combined.py \
@@ -360,14 +363,14 @@ jobs:
           python3 builder/scripts/patch_combined_refresh_contract.py --verify-ipa artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa \
             2>&1 | tee artifacts/logs/runtime-contract-verification.log
           printf 'builder_repository=NRG-Wardog/sidestore-auto-refresh\nbuilder_commit=%s\nbuilder_baseline=%s\n' "$BUILDER_REF" "$UNIFIED_RELEASE_BASELINE" > artifacts/builder-commit.txt
-          python3 builder/scripts/combined_build_evidence.py collect --product v3.0.3-rc \
+          python3 builder/scripts/combined_build_evidence.py collect --product v3.1.0 \
             --ipa artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa --output artifacts/debug-evidence --source work/LiveContainer --side-source work/EmbeddedSideStore \
             "$RUNNER_TEMP/livecontainer-derived-data/Build/Products/Release-iphoneos" \
             "$RUNNER_TEMP/embedded-sidestore-derived-data/Build/Products/Release-iphoneos"
           python3 builder/scripts/verify_candidate_ipa.py \
             --ipa artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa \
             --provenance artifacts/debug-evidence/candidate-provenance.json \
-            --product v3.0.3-rc \
+            --product v3.1.0 \
             --side-source work/EmbeddedSideStore \
             --builder-commit "$GITHUB_SHA" \
             --build-run-url "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
@@ -449,7 +452,7 @@ jobs:
           python3 builder/scripts/verify_candidate_ipa.py \
             --ipa artifacts/downloaded-ipa/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa \
             --provenance artifacts/downloaded-debug-evidence/candidate-provenance.json \
-            --product v3.0.3-rc \
+            --product v3.1.0 \
             --side-source work/EmbeddedSideStore \
             --builder-commit "$GITHUB_SHA" \
             --build-run-url "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
