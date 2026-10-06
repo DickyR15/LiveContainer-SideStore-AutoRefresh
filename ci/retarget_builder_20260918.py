@@ -203,14 +203,14 @@ def _compat_headless_pipeline_handler(text):
         "func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String)",
         """func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String) async -> Bool {
     return false
-}''',
+}""",
         "modern bundle-id mismatch adapter",
     )
     replace_func(
         "func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode)",
         """func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode) async throws {
     throw OperationError.invalidOperationContext("PipelineHandler: Cannot review permissions in headless service mode")
-}''',
+}""",
         "modern permission review adapter",
     )
     replace_func(
@@ -228,28 +228,28 @@ def _compat_headless_pipeline_handler(text):
         "func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String)",
         """func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String) async throws -> Bool {
     return false
-}''',
+}""",
         "modern unsupported-iOS adapter",
     )
     replace_func(
         "func requestBackgroundSuspension() async",
         """func requestBackgroundSuspension() async {
     // Backgrounding is host-owned for the embedded service.
-}''',
+}""",
         "modern background suspension adapter",
     )
     replace_func(
         "func resolveBundleIDOverride(initialBundleID: String)",
         """func resolveBundleIDOverride(initialBundleID: String) async throws -> (customID: String, appendTeamID: Bool)? {
     return (initialBundleID, true)
-}''',
+}""",
         "modern bundle-id customization adapter",
     )
     replace_func(
         "func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String)",
         """func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String) async throws -> AppGroupResolution {
     return .correctAndProceed(correctedGroup)
-}''',
+}""",
         "modern app-group adapter",
     )
     replace_func(
@@ -287,14 +287,14 @@ def _compat_headless_pipeline_handler(text):
         "func resolveAppIconCustomization(appName: String)",
         """func resolveAppIconCustomization(appName: String) async throws -> URL? {
     return nil
-}''',
+}""",
         "modern icon customization adapter",
     )
     replace_func(
         "func resolveProvisioningProfileCustomization(appName: String, bundleID: String)",
         """func resolveProvisioningProfileCustomization(appName: String, bundleID: String) async throws -> ProfileCustomizationChoice? {
     return .defaultProfile
-}''',
+}""",
         "modern provisioning-profile adapter",
     )
 
@@ -335,7 +335,7 @@ def _compat_headless_app_manager_ui(text):
             '''private func makePipelineHandler(presentingViewController: UIViewController?) -> PipelineExecutionHandler {
         // V3_HEADLESS_APP_MANAGER_PIPELINE_FACTORY_V1
         return PipelineHandler()
-    }""",
+    }''',
             "modern AppManager pipeline factory",
         )
     text += r'''
