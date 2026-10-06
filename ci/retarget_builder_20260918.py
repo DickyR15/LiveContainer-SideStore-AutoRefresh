@@ -332,10 +332,10 @@ def _compat_headless_app_manager_ui(text):
         text = replace_swift_function(
             text,
             signature,
-            '''private func makePipelineHandler(presentingViewController: UIViewController?) -> PipelineExecutionHandler {
+            """private func makePipelineHandler(presentingViewController: UIViewController?) -> PipelineExecutionHandler {
         // V3_HEADLESS_APP_MANAGER_PIPELINE_FACTORY_V1
         return PipelineHandler()
-    }''',
+    }""",
             "modern AppManager pipeline factory",
         )
     text += r'''
