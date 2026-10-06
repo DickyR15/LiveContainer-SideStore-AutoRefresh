@@ -338,11 +338,11 @@ def _compat_headless_app_manager_ui(text):
     }""",
             "modern AppManager pipeline factory",
         )
-    text += r'''
+    text += r"""
 // V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1: interactive sign-in is host-owned.
 // V3_HEADLESS_APP_MANAGER_DEACTIVATE_APPLIMIT_WRAPPER_REMOVED_V1: app-limit UI is upstream-owned.
 // V3_TYPED_PAIRING_FAILURE_PROPAGATION_V1: typed pairing errors stay intact.
-'''
+"""
     forbidden = ("presenterProvider:", "isResignActive:", "ResignAltStoreViewController",
                  "self.deactivateApps(for: appBundle")
     if any(value in text for value in forbidden):
@@ -355,7 +355,7 @@ headless_app_manager_ui = _compat_headless_app_manager_ui
 
     integ_path = root / "scripts" / "patch_sidestore_integration.py"
     integ = integ_path.read_text(encoding="utf-8")
-    integ += r'''
+    integ += r"""
 
 _v3_original_replace_once = replace_once
 
@@ -389,12 +389,12 @@ def _v3_replace_once_modern_gateway(text, old, new, label):
     return _v3_original_replace_once(text, old, new, label)
 
 replace_once = _v3_replace_once_modern_gateway
-'''
+"""
     integ_path.write_text(integ, encoding="utf-8")
 
     bg_path = root / "scripts" / "patch_background_automation.py"
     bg = bg_path.read_text(encoding="utf-8")
-    bg += r'''
+    bg += r"""
 
 _v3_original_replace_once = replace_once
 
@@ -417,7 +417,7 @@ def _v3_replace_once_modern_background(text, old, new, label):
     return _v3_original_replace_once(text, old, new, label)
 
 replace_once = _v3_replace_once_modern_background
-'''
+"""
     bg_path.write_text(bg, encoding="utf-8")
 
     # Current DatabaseManager has removed the legacy migration helper. Preserve
