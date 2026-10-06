@@ -166,6 +166,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 def _v3_modern_source_compat(root: Path) -> None:
     """Adapt the legacy builder to the pinned Sep-18-2026 SideStore APIs."""
     service_path = root / "scripts" / "patch_v3_service.py"
@@ -200,60 +201,60 @@ def _compat_headless_pipeline_handler(text):
 
     replace_func(
         "func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String)",
-        '''func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String) async -> Bool {
+        """func resolveBundleIDMismatch(targetID: String, activeEffectiveID: String) async -> Bool {
     return false
 }''',
         "modern bundle-id mismatch adapter",
     )
     replace_func(
         "func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode)",
-        '''func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode) async throws {
+        """func reviewPermissions(_ permissions: [ALTEntitlement], for app: AppProtocol, mode: PermissionReviewMode) async throws {
     throw OperationError.invalidOperationContext("PipelineHandler: Cannot review permissions in headless service mode")
 }''',
         "modern permission review adapter",
     )
     replace_func(
         "func selectAppExtensionsToRemove(",
-        '''func selectAppExtensionsToRemove(
+        """func selectAppExtensionsToRemove(
         appBundle: ALTApplication,
         localAppExtensions: [ALTApplication],
         excessExtensions: Set<ALTApplication>
     ) async throws -> ExtensionRemovalDecision {
         return .keepAll(useMainProfile: false)
-    }''',
+    }""",
         "modern extension review adapter",
     )
     replace_func(
         "func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String)",
-        '''func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String) async throws -> Bool {
+        """func resolveUnsupportediOSVersion(errorDescription: String, appName: String, compatibleVersion: String) async throws -> Bool {
     return false
 }''',
         "modern unsupported-iOS adapter",
     )
     replace_func(
         "func requestBackgroundSuspension() async",
-        '''func requestBackgroundSuspension() async {
+        """func requestBackgroundSuspension() async {
     // Backgrounding is host-owned for the embedded service.
 }''',
         "modern background suspension adapter",
     )
     replace_func(
         "func resolveBundleIDOverride(initialBundleID: String)",
-        '''func resolveBundleIDOverride(initialBundleID: String) async throws -> (customID: String, appendTeamID: Bool)? {
+        """func resolveBundleIDOverride(initialBundleID: String) async throws -> (customID: String, appendTeamID: Bool)? {
     return (initialBundleID, true)
 }''',
         "modern bundle-id customization adapter",
     )
     replace_func(
         "func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String)",
-        '''func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String) async throws -> AppGroupResolution {
+        """func resolveAppGroupMismatch(originalGroup: String, correctedGroup: String) async throws -> AppGroupResolution {
     return .correctAndProceed(correctedGroup)
 }''',
         "modern app-group adapter",
     )
     replace_func(
         "func resolveInfoPlistCustomization(\n        targets: [InfoPlistTarget],",
-        '''func resolveInfoPlistCustomization(
+        """func resolveInfoPlistCustomization(
         targets: [InfoPlistTarget],
         initialBundleID: String,
         appendTeamID: Bool,
@@ -265,12 +266,12 @@ def _compat_headless_pipeline_handler(text):
             fallback[target.id] = target.initialPlist
         }
         return (fallback, appendTeamID)
-    }''',
+    }""",
         "modern Info.plist customization adapter",
     )
     replace_func(
         "func resolveEntitlementsCustomization(\n        targets: [EntitlementsTarget],",
-        '''func resolveEntitlementsCustomization(
+        """func resolveEntitlementsCustomization(
         targets: [EntitlementsTarget],
         teamType: ALTTeamType
     ) async throws -> [String: [String: any Sendable]]? {
@@ -279,19 +280,19 @@ def _compat_headless_pipeline_handler(text):
             fallback[target.id] = target.initialEntitlements
         }
         return fallback
-    }''',
+    }""",
         "modern entitlement customization adapter",
     )
     replace_func(
         "func resolveAppIconCustomization(appName: String)",
-        '''func resolveAppIconCustomization(appName: String) async throws -> URL? {
+        """func resolveAppIconCustomization(appName: String) async throws -> URL? {
     return nil
 }''',
         "modern icon customization adapter",
     )
     replace_func(
         "func resolveProvisioningProfileCustomization(appName: String, bundleID: String)",
-        '''func resolveProvisioningProfileCustomization(appName: String, bundleID: String) async throws -> ProfileCustomizationChoice? {
+        """func resolveProvisioningProfileCustomization(appName: String, bundleID: String) async throws -> ProfileCustomizationChoice? {
     return .defaultProfile
 }''',
         "modern provisioning-profile adapter",
@@ -334,7 +335,7 @@ def _compat_headless_app_manager_ui(text):
             '''private func makePipelineHandler(presentingViewController: UIViewController?) -> PipelineExecutionHandler {
         // V3_HEADLESS_APP_MANAGER_PIPELINE_FACTORY_V1
         return PipelineHandler()
-    }''',
+    }""",
             "modern AppManager pipeline factory",
         )
     text += r'''
