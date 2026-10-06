@@ -1,7 +1,9 @@
-name: LiveContainer Nightly 20260918 + SideStore AutoRefresh build
+name: Unified LiveContainer + SideStore v3.1.0 — Nightly Release @ 20260918
 
 on:
   workflow_dispatch:
+  push:
+    branches: [v3.1.0-nightly-20260918-clean]
 
 permissions:
   contents: read
@@ -12,11 +14,11 @@ concurrency:
 
 env:
   LIVE_CONTAINER_REF: 4dbe0f9a626de801184a42c0be8d2cb105058e3d
-  EMBEDDED_SIDESTORE_REF: 12a496ca1c766a102193634879823d16610bf1cd
-  MINIMUXER_REF: 20248550bbe014805460d4fa22ea69f146d338a0
-  SIDESIGN_REF: df2b8e4257454f0c7629276d409d6e9d7953fdf6
-  SIDESIGN_GSA_FIX: 35993d7f68950ce00d6bf1fd0fbcaa7bef51dc9c
-  IDEVICE_REF: ebd7dadfc55d1c4facee3d11ecf5b28e20548b57
+  EMBEDDED_SIDESTORE_REF: 43e052cd970cb16fed6b0bb4feeaec5e5d7efae7
+  MINIMUXER_REF: 05318c65fef7dac08e54f33d5f16299f5fc3b696
+  SIDESIGN_REF: 6b68651697f99791ef85404b7aea1891a26a285d
+  SIDESIGN_GSA_FIX: 6b68651697f99791ef85404b7aea1891a26a285d
+  IDEVICE_REF: f34cfd3953bbd9ee54c81cf600011a35205a098b
   JKTCP_REF: e674e1eee6d5943e13b1eba0bd24a9dd0b2fa020
   BASELINE: nightly-20260918
   BUILDER_REF: 651587433eb7142089509e558dcfba9eb69d0470
@@ -47,7 +49,7 @@ jobs:
       - name: Checkout pinned embedded SideStore sources
         uses: actions/checkout@v4
         with:
-          repository: LiveContainer/SideStore
+          repository: SideStore/SideStore
           ref: ${{ env.EMBEDDED_SIDESTORE_REF }}
           path: work/EmbeddedSideStore
           fetch-depth: 1
@@ -178,279 +180,3 @@ jobs:
 
       - name: Execute real layout regression on final generated source
         shell: bash
-        run: |
-          set -euo pipefail
-          git -C builder fetch --no-tags origin 7d8ae12905f8baa6e0ecc4dbdd3f25e2aa0e43fa
-          python3 builder/scripts/run_issue25_rendering.py --livecontainer work/LiveContainer \
-            --v3-source work/LiveContainer/LiveContainerSwiftUI/Views/V3UnifiedShell.swift \
-            --output artifacts/layout-evidence 2>&1 | tee artifacts/logs/layout-rendering.log
-
-      - name: Preserve real layout measurements and screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: combined-nightly-20260918-layout-evidence
-          path: |
-            artifacts/layout-evidence/**/*.json
-            artifacts/layout-evidence/**/*.png
-          if-no-files-found: warn
-          retention-days: 90
-
-      - name: Build unified host before transport compilation
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcodebuild -project work/LiveContainer/LiveContainer.xcodeproj \
-            -scheme LiveContainer -sdk iphoneos -configuration Release \
-            -derivedDataPath "$RUNNER_TEMP/livecontainer-derived-data" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee artifacts/logs/livecontainer-build.log
-
-      - name: Install build tools
-        run: |
-          set -euo pipefail
-          if ! command -v ldid >/dev/null 2>&1; then HOMEBREW_NO_AUTO_UPDATE=1 brew install ldid; fi
-          if ! command -v bindgen >/dev/null 2>&1; then cargo install --locked bindgen-cli --version 0.72.1; fi
-          rustup target add aarch64-apple-ios
-
-      - name: Execute canonical LiveContainer certificate observation regression
-        env:
-          LIVE_CONTAINER_TEST_SOURCE: ${{ github.workspace }}/work/LiveContainer
-          REQUIRE_LC_CERTIFICATE_NATIVE_TESTS: "1"
-        shell: bash
-        run: |
-          set -euo pipefail
-          brew install openssl@3
-          python3 -m unittest discover -s builder/tests -p test_lc_certificate_observation.py -v
-
-      - name: Apply focused CoreDevice transport patches
-        run: |
-          set -euo pipefail
-          python3 builder/scripts/patch_jktcp_reliability.py jktcp
-          python3 builder/scripts/patch_coredevice_idevice.py idevice jktcp
-          ! grep -R -E 'rppairing_connect_quic|create_quic_listener|quinn::' \
-            idevice/ffi/src/tunnel_provider.rs idevice/idevice/src/tunnel.rs
-          grep -Fq 'packet.extend_from_slice(CDTUNNEL_MAGIC)' idevice/idevice/src/tunnel.rs
-          grep -Fq 'effective_mss = negotiated_mtu.saturating_sub(60).min(1340)' idevice/ffi/src/tunnel_provider.rs
-          grep -Fq 'HeartbeatClient::connect' idevice/ffi/src/tunnel_provider.rs
-          grep -Fq 'run_sync_local(async move { fd.write_entire(data_slice).await })' idevice/ffi/src/afc.rs
-          grep -Fq 'let data = unsafe { Box::from_raw(slice) };' idevice/ffi/src/lib.rs
-
-      - name: Test patched transport sources
-        run: |
-          set -euo pipefail
-          cargo fmt --manifest-path jktcp/Cargo.toml
-          cargo fmt --manifest-path idevice/ffi/Cargo.toml
-          git -C jktcp diff --check
-          git -C idevice diff --check
-          cargo test --manifest-path jktcp/Cargo.toml --lib -- --skip tests::local_tcp --skip tests::handle_speed
-          cargo check --manifest-path idevice/ffi/Cargo.toml --features obfuscate
-
-      - name: Build idevice for iOS
-        working-directory: idevice
-        run: |
-          set -euo pipefail
-          BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$(xcrun --sdk iphoneos --show-sdk-path)" \
-            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
-            cargo build --release --target aarch64-apple-ios --features obfuscate --manifest-path ffi/Cargo.toml
-          test -f target/aarch64-apple-ios/release/libidevice_ffi.a
-          test -f ffi/idevice.h
-          grep -Fq 'tunnel_create_usb' ffi/idevice.h
-          grep -Fq 'tunnel_heartbeat_is_active' ffi/idevice.h
-          grep -Fq 'idevice_set_transport_log_callback' ffi/idevice.h
-          xcrun nm -arch arm64 -g target/aarch64-apple-ios/release/libidevice_ffi.a \
-            >/tmp/current-idevice-symbols.txt 2>/tmp/current-nm-reader-warnings.txt || true
-          grep -E '[[:space:]][Tt][[:space:]]_lockdown_diag_rust_log$' /tmp/current-idevice-symbols.txt
-          grep -E '[[:space:]][Tt][[:space:]]_idevice_set_transport_log_callback$' /tmp/current-idevice-symbols.txt
-          rm -rf swift/IDevice.xcframework
-          cp ffi/idevice.h swift/include/idevice.h
-          xcodebuild -create-xcframework -library target/aarch64-apple-ios/release/libidevice_ffi.a \
-            -headers swift/include -output swift/IDevice.xcframework
-
-      - name: Patch combined transport and inject local idevice
-        shell: bash
-        run: |
-          set -euo pipefail
-          MUX=work/EmbeddedSideStore/Dependencies/minimuxer
-          mkdir -p "$MUX/DeviceGateway/LocalBinary"
-          rm -rf "$MUX/DeviceGateway/LocalBinary/IDevice.xcframework"
-          cp -R idevice/swift/IDevice.xcframework "$MUX/DeviceGateway/LocalBinary/IDevice.xcframework"
-          python3 builder/scripts/patch_combined_transport.py "$MUX"
-          python3 builder/scripts/patch_local_idevice_package.py "$MUX"
-          git -C "$MUX" diff --binary >"$RUNNER_TEMP/combined-transport-first.diff"
-          python3 -c 'import hashlib, pathlib, sys; root = pathlib.Path(sys.argv[1]); print([(str(p.relative_to(root)), hashlib.sha256(p.read_bytes()).hexdigest()) for p in sorted(root.rglob("*.swift"))])' "$MUX" >"$RUNNER_TEMP/combined-swift-first.txt"
-          python3 builder/scripts/patch_combined_transport.py "$MUX"
-          python3 builder/scripts/patch_local_idevice_package.py "$MUX"
-          git -C "$MUX" diff --binary >"$RUNNER_TEMP/combined-transport-second.diff"
-          python3 -c 'import hashlib, pathlib, sys; root = pathlib.Path(sys.argv[1]); print([(str(p.relative_to(root)), hashlib.sha256(p.read_bytes()).hexdigest()) for p in sorted(root.rglob("*.swift"))])' "$MUX" >"$RUNNER_TEMP/combined-swift-second.txt"
-          cmp "$RUNNER_TEMP/combined-transport-first.diff" "$RUNNER_TEMP/combined-transport-second.diff"
-          cmp "$RUNNER_TEMP/combined-swift-first.txt" "$RUNNER_TEMP/combined-swift-second.txt"
-          python3 builder/scripts/patch_combined_service_startup.py --transport "$MUX"
-          python3 builder/scripts/patch_combined_service_startup.py --transport "$MUX"
-          git -C "$MUX" diff --check
-          while IFS= read -r -d '' source; do swiftc -frontend -parse "$source"; done < <(find "$MUX" -type f -name '*.swift' -not -path '*/.build/*' -print0)
-          swift package --package-path "$MUX/DeviceGateway" dump-package >"$RUNNER_TEMP/combined-gateway-package.json"
-          # SideSign, Anisette and auth protocol stay upstream-owned. The only
-          # Core Auth/AppManager changes remove presenter-only UI adapters from
-          # the headless target and are checked against exact pinned transforms.
-          git -C work/EmbeddedSideStore diff --exit-code -- SideStore/Core/Anisette
-          expected_auth=$(printf '%s\n' \
-            'AltStore/Managing Apps/AppManager.swift' \
-            'SideStore/Core/Auth/AuthManager.swift' \
-            'SideStore/Core/Auth/DeveloperPortalProxy.swift' | sort)
-          actual_auth=$(git -C work/EmbeddedSideStore diff --name-only -- \
-            'AltStore/Managing Apps/AppManager.swift' SideStore/Core/Auth | sort)
-          test "$actual_auth" = "$expected_auth"
-          SIDESIGN=work/EmbeddedSideStore/Dependencies/SideSign
-          SIDESTORE=work/EmbeddedSideStore
-          python3 builder/scripts/patch_sidesign_privacy.py "$SIDESIGN" "$SIDESTORE"
-          python3 builder/scripts/patch_sidesign_privacy.py "$SIDESIGN" "$SIDESTORE"
-          python3 builder/scripts/patch_sidesign_2fa_state.py "$SIDESIGN"
-          python3 builder/scripts/patch_sidesign_2fa_state.py "$SIDESIGN"
-          python3 builder/scripts/patch_combined_service_startup.py --portal "$SIDESIGN"
-          python3 builder/scripts/patch_combined_service_startup.py --portal "$SIDESIGN"
-          git -C "$SIDESIGN" diff --check
-          expected_sidesign=$(printf '%s\n' \
-            'Sources/DeveloperPortal/Authentication.swift' \
-            'Sources/DeveloperPortal/DeveloperPortalAPI.swift' \
-            'Sources/Logging.swift' | sort)
-          actual_sidesign=$(git -C "$SIDESIGN" diff --name-only | sort)
-          test "$actual_sidesign" = "$expected_sidesign"
-          git -C "$SIDESTORE" diff --check
-          expected_side_logging=$(printf '%s\n' \
-            'SideStore/Core/Logging/OperationLogging.swift' \
-            'SideStore/Core/Logging/SideStoreLogging.swift' | sort)
-          actual_side_logging=$(git -C "$SIDESTORE" diff --name-only -- SideStore/Core/Logging | sort)
-          test "$actual_side_logging" = "$expected_side_logging"
-
-      - name: Build host and embedded SideStore source targets
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf "$HOME/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_krzyzanowskim_OpenSSL_releases_download_3_6_2000_OpenSSL_xcframework_zip"
-          rm -rf "$HOME/Library/Developer/Xcode/DerivedData"/*/SourcePackages/artifacts/openssl
-          artifact="$HOME/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_krzyzanowskim_OpenSSL_releases_download_3_6_2000_OpenSSL_xcframework_zip"
-          resolved=0
-          for attempt in 1 2 3; do
-            rm -rf "$artifact"
-            rm -rf "$HOME/Library/Developer/Xcode/DerivedData"/*/SourcePackages/artifacts/openssl 2>/dev/null || true
-            rm -rf "$RUNNER_TEMP/embedded-sidestore-derived-data/SourcePackages/artifacts/openssl"
-            if xcodebuild -resolvePackageDependencies -disablePackageRepositoryCache \
-                -project work/EmbeddedSideStore/AltStore.xcodeproj -scheme SideStore \
-                -derivedDataPath "$RUNNER_TEMP/embedded-sidestore-derived-data"; then resolved=1; break; fi
-            sleep 2
-          done
-          test "$resolved" -eq 1
-          xcodebuild -project work/EmbeddedSideStore/AltStore.xcodeproj \
-            -scheme SideStore -sdk iphoneos -configuration Release \
-            -derivedDataPath "$RUNNER_TEMP/embedded-sidestore-derived-data" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee artifacts/logs/embedded-sidestore-build.log
-
-      - name: Package and verify combined LiveContainer plus SideStore
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 builder/scripts/combined_build_evidence.py identity --product v3.0.3-rc \
-            "$RUNNER_TEMP/livecontainer-derived-data/Build/Products/Release-iphoneos/LiveContainer.app" \
-            "$RUNNER_TEMP/embedded-sidestore-derived-data/Build/Products/Release-iphoneos/SideStore.app"
-          python3 builder/scripts/package_livecontainer_combined.py \
-            --root work/LiveContainer \
-            --host "$RUNNER_TEMP/livecontainer-derived-data/Build/Products/Release-iphoneos/LiveContainer.app" \
-            --side "$RUNNER_TEMP/embedded-sidestore-derived-data/Build/Products/Release-iphoneos/SideStore.app" \
-            --output artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa 2>&1 | tee artifacts/logs/combined-packaging.log
-          python3 builder/scripts/patch_combined_refresh_contract.py --verify-ipa artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa \
-            2>&1 | tee artifacts/logs/runtime-contract-verification.log
-          printf 'builder_repository=NRG-Wardog/sidestore-auto-refresh\nbuilder_commit=%s\nbuilder_baseline=%s\n' "$BUILDER_REF" "$UNIFIED_RELEASE_BASELINE" > artifacts/builder-commit.txt
-          python3 builder/scripts/combined_build_evidence.py collect --product v3.0.3-rc \
-            --ipa artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa --output artifacts/debug-evidence --source work/LiveContainer --side-source work/EmbeddedSideStore \
-            "$RUNNER_TEMP/livecontainer-derived-data/Build/Products/Release-iphoneos" \
-            "$RUNNER_TEMP/embedded-sidestore-derived-data/Build/Products/Release-iphoneos"
-          python3 builder/scripts/verify_candidate_ipa.py \
-            --ipa artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa \
-            --provenance artifacts/debug-evidence/candidate-provenance.json \
-            --product v3.0.3-rc \
-            --side-source work/EmbeddedSideStore \
-            --builder-commit "$GITHUB_SHA" \
-            --build-run-url "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-            --output artifacts/candidate-package-verification.json
-
-      - name: Verify embedded CoreDevice transport executable
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import zipfile
-          ipa = Path('artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa')
-          embedded = 'Payload/LiveContainer.app/Frameworks/SideStoreApp.framework/SideStore'
-          with zipfile.ZipFile(ipa) as archive:
-              executable = archive.read(embedded)
-          assert executable[:4] == b'\xcf\xfa\xed\xfe', 'Expected embedded arm64 Mach-O'
-          assert b'no ipsec interface (required for lockdown on iOS 26.4+)' not in executable, 'Obsolete IPSec guard remains'
-          markers = ('[SIDESTORE_COREDEVICE] PAIRING_MODE_SELECTED', '[SIDESTORE_COREDEVICE] TRANSPORT_CREATE_PASS',
-                     '[SIDESTORE_COREDEVICE] ENDPOINT_SELECT', '[SIDESTORE_COREDEVICE] LOCALVPN_UTUN_ACCEPTED',
-                     '[SIDESTORE_COREDEVICE] JKTCP_MSS_CONFIG')
-          for marker in markers:
-              assert marker.encode() in executable, f'Embedded transport marker missing: {marker}'
-          Path('artifacts/logs/embedded-transport-verification.txt').write_text(
-              f'executable={embedded}\n' + '\n'.join(markers) + '\nverification=PASS\n')
-          PY
-
-      - name: Upload combined LiveContainer IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}-IPA
-          path: |
-            artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa
-            artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.verification.json
-            artifacts/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.runtime-verification.json
-            artifacts/builder-commit.txt
-            artifacts/debug-evidence/candidate-provenance.json
-            artifacts/candidate-package-verification.json
-            artifacts/logs/upstream-auth-provenance.txt
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 7
-
-      - name: Upload source-build evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: livecontainer-autorefresh-build-evidence
-          path: artifacts/logs
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Preserve matching crash symbols and generated startup source
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: combined-nightly-20260918-debug-evidence
-          path: artifacts/debug-evidence
-          include-hidden-files: true
-          if-no-files-found: warn
-          retention-days: 90
-
-      - name: Download uploaded candidate for delivery verification
-        uses: actions/download-artifact@v4
-        with:
-          name: LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}-IPA
-          path: artifacts/downloaded-ipa
-
-      - name: Download uploaded source and symbol evidence
-        uses: actions/download-artifact@v4
-        with:
-          name: combined-v3-debug-evidence
-          path: artifacts/downloaded-debug-evidence
-
-      - name: Verify the actual uploaded candidate and evidence
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 builder/scripts/verify_candidate_ipa.py \
-            --ipa artifacts/downloaded-ipa/LiveContainer-SideStore-AutoRefresh-nightly-20260918-build${{ github.run_number }}.ipa \
-            --provenance artifacts/downloaded-debug-evidence/candidate-provenance.json \
-            --product v3.0.3-rc \
-            --side-source work/EmbeddedSideStore \
-            --builder-commit "$GITHUB_SHA" \
-            --build-run-url "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-            --output artifacts/downloaded-candidate-verification.json
