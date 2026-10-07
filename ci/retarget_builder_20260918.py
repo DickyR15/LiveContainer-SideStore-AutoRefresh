@@ -258,7 +258,25 @@ def _v3_patch_builder_scripts(root: Path) -> None:
 '''
     if base_old in si:
         si = si.replace(base_old, base_new, 1)
-    integration.write_text(si, encoding="utf-8")
+
+    si += r'''
+    
+# V3_SEP18_INTEGRATION_REPLACE_OVERRIDE_V1
+_v3_integration_original_replace_once = replace_once
+def replace_once(text, old, new, label):
+    count = text.count(old)
+    if count == 0 and label in {
+        "pinned rppairing result type",
+        "pinned rppairing arguments",
+        "pinned rppairing metadata",
+    }:
+        return text
+    if count != 1:
+        die(f"{label}: expected one anchor, found {count}")
+    return text.replace(old, new, 1)
+
+'''
+        integration.write_text(si, encoding="utf-8")
 
     # Sep-18 FetchProvisioningProfiles already contains the desired parent/extension
     # bundle-ID algorithm. The legacy backport anchor is therefore a no-op.
@@ -277,7 +295,37 @@ def _v3_patch_builder_scripts(root: Path) -> None:
 '''
     if old_anchor in cs:
         cs = cs.replace(old_anchor, new_anchor, 1)
-    combined.write_text(cs, encoding="utf-8")
+
+    cs += r'''
+    
+# V3_SEP18_PROVISIONING_OVERRIDE_V1
+_v3_original_patch_provisioning_profile_requests = patch_provisioning_profile_requests
+def patch_provisioning_profile_requests(text):
+    modern = "if let preferredBundleID = await self.getPreferredBundleID(for: targetAppBundle, team: team)"
+    if modern in text and "let parentID: String" in text:
+        return text
+    return _v3_original_patch_provisioning_profile_requests(text)
+
+'''
+        combined.write_text(cs, encoding="utf-8")
+
+    s += r'''
+    
+# V3_SEP18_APPEND_ONLY_COMPAT_V1
+_v3_original_replace = replace
+def replace(text, old, new):
+    count = text.count(old)
+    if count == 0 and "self.session = nil" in old:
+        async_old = old.replace("    ) {\n", "    ) async {\n", 1)
+        async_new = new.replace("    ) {\n", "    ) async {\n", 1)
+        if text.count(async_old) == 1:
+            return text.replace(async_old, async_new, 1)
+        if "v3BeginIdentityTransition()" in text and "v3CompleteIdentityTransition()" in text:
+            return text
+    return _v3_original_replace(text, old, new)
+
+replace = replace
+'''
 
 def main() -> None:
     root = Path("builder")
@@ -443,8 +491,6 @@ def _compat_headless_pipeline_handler(text):
     text += "\n// V3_HEADLESS_PIPELINE_UI_DECISIONS_V1: Sep-18 source normalized.\n"
     return text
 
-headless_pipeline_handler = _compat_headless_pipeline_handler
-
 
 def _compat_headless_app_manager_ui(text):
     marker = "V3_HEADLESS_APP_MANAGER_SIGNIN_REMOVED_V1"
@@ -471,8 +517,6 @@ def _compat_headless_app_manager_ui(text):
     if any(value in text for value in forbidden):
         raise SystemExit("v3 service: modern AppManager UI wrapper removal is partial")
     return text
-
-headless_app_manager_ui = _compat_headless_app_manager_ui
 '''
     service_path.write_text(service_text, encoding="utf-8")
 
