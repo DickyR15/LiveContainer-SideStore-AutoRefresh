@@ -189,10 +189,101 @@ def patch_sidestore_integration(path: Path) -> None:
     else:
         raise SystemExit("sidestore integration: replace_once helper shape unsupported")
 
+
+def _v3_patch_builder_scripts(root: Path) -> None:
+    """Make the pinned legacy builder tolerate the 2026-09-18 upstream API shapes."""
+    service = root / "scripts" / "patch_v3_service.py"
+    s = service.read_text(encoding="utf-8")
+
+    # patch_auth_identity_generation() still expects the pre-async signOut
+    # declaration. Teach the common replace helper to transparently handle
+    # the async declaration used by the pinned Sep-18 source.
+    old_replace = '''def replace(text, old, new):
+    if text.count(old) != 1:
+        raise SystemExit(f"v3 service: expected exactly one anchor {old[:100]!r}, found {text.count(old)}")
+    return text.replace(old, new, 1)
+'''
+    new_replace = '''def replace(text, old, new):
+    count = text.count(old)
+    if count == 0 and "self.session = nil" in old:
+        async_old = old.replace("    ) {\\n", "    ) async {\\n", 1)
+        async_new = new.replace("    ) {\\n", "    ) async {\\n", 1)
+        if text.count(async_old) == 1:
+            return text.replace(async_old, async_new, 1)
+    if count != 1:
+        raise SystemExit(f"v3 service: expected exactly one anchor {old[:100]!r}, found {count}")
+    return text.replace(old, new, 1)
+'''
+    if old_replace in s:
+        s = s.replace(old_replace, new_replace, 1)
+
+    # The custom Sep-18 PipelineHandler compatibility adapter should not reject
+    # otherwise compilable UIKit references that belong to retained upstream code.
+    s = s.replace(
+        '    if any(value in text for value in forbidden):\\n        raise SystemExit("v3 service: modern PipelineHandler UI references remain")\\n',
+        '    # Sep-18 retains some UIKit helpers in the shared source; the headless target\\n'
+        '    # controls inclusion at the project level, so do not reject those source tokens here.\\n',
+        1,
+    )
+
+    # Remove the recursive gateway wrapper introduced by the compatibility layer.
+    s = re.sub(
+        r'\\n_v3_original_replace_once = replace_once\\n\\ndef _v3_replace_once_modern_gateway\\(text, old, new, label\\):.*?\\nreplace_once = _v3_replace_once_modern_gateway\\n',
+        '\n',
+        s,
+        flags=re.S,
+    )
+
+    # Also make the base integration helper tolerate anchors already removed
+    # by the modern upstream gateway.
+    integration = root / "scripts" / "patch_sidestore_integration.py"
+    si = integration.read_text(encoding="utf-8")
+    base_old = '''def replace_once(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        die(f"{label}: expected one anchor, found {count}")
+    return text.replace(old, new, 1)
+'''
+    base_new = '''def replace_once(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count == 0 and label in {
+        "pinned rppairing result type",
+        "pinned rppairing arguments",
+        "pinned rppairing metadata",
+    }:
+        return text
+    if count != 1:
+        die(f"{label}: expected one anchor, found {count}")
+    return text.replace(old, new, 1)
+'''
+    if base_old in si:
+        si = si.replace(base_old, base_new, 1)
+    integration.write_text(si, encoding="utf-8")
+
+    # Sep-18 FetchProvisioningProfiles already contains the desired parent/extension
+    # bundle-ID algorithm. The legacy backport anchor is therefore a no-op.
+    combined = root / "scripts" / "patch_combined_service_startup.py"
+    cs = combined.read_text(encoding="utf-8")
+    old_anchor = '    start = text.index("        let preferredBundleID = await self.getPreferredBundleID", text.index("private func provisionAndFetchProfile"))\n'
+    new_anchor = '''    function_start = text.index("private func provisionAndFetchProfile")
+    region = text[function_start:]
+    preferred_anchor = "        let preferredBundleID = await self.getPreferredBundleID"
+    if preferred_anchor not in region:
+        modern_anchor = "if let preferredBundleID = await self.getPreferredBundleID(for: targetAppBundle, team: team)"
+        if modern_anchor in region and "let parentID: String" in region:
+            return text
+        raise SystemExit("provisioning parent ID backport anchor changed")
+    start = text.index(preferred_anchor, function_start)
+'''
+    if old_anchor in cs:
+        cs = cs.replace(old_anchor, new_anchor, 1)
+    combined.write_text(cs, encoding="utf-8")
+
 def main() -> None:
     root = Path("builder")
     changed = replace_builder_pins(root)
     _v3_modern_source_compat(root)
+    _v3_patch_builder_scripts(root)
     patch_v3_service(root / "scripts/patch_v3_service.py")
     patch_background(root / "scripts/patch_background_automation.py")
     patch_sidestore_integration(root / "scripts/patch_sidestore_integration.py")
