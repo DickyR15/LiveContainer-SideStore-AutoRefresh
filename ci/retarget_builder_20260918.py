@@ -327,6 +327,36 @@ def replace(text, old, new):
 replace = replace
 '''
     service.write_text(s, encoding="utf-8")
+    _v3_reorder_script_guard(service, "service")
+    _v3_reorder_script_guard(integration, "simple")
+    _v3_reorder_script_guard(combined, "combined")
+
+
+def _v3_reorder_script_guard(path: Path, mode: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    if mode == "service":
+        pattern = re.compile(
+            r'(?ms)^if __name__ == "__main__":\n'
+            r'    if len\(sys\.argv\) == 4 and sys\.argv\[1\] == "--verify-sign-in-operation":\n'
+            r'.*?^        print\("v3 command patch applied and verified"\)\n'
+        )
+    elif mode in {"simple", "combined"}:
+        pattern = re.compile(r'(?ms)^if __name__ == "__main__":\n    main\(\)\n')
+        if mode == "combined":
+            pattern = re.compile(
+                r'(?ms)^if __name__ == "__main__":\n'
+                r'    if len\(sys\.argv\) == 3 and sys\.argv\[1\] == "--portal":\n'
+                r'.*?^    patch\(Path\(sys\.argv\[1\]\)\.resolve\(\), Path\(sys\.argv\[2\]\)\.resolve\(\), sys\.argv\[3\]\)\n'
+            )
+    else:
+        raise ValueError(mode)
+    match = pattern.search(text)
+    if not match:
+        return
+    guard = match.group(0).rstrip() + "\n"
+    text = text[:match.start()] + text[match.end():]
+    text = text.rstrip() + "\n\n" + guard
+    path.write_text(text, encoding="utf-8")
 
 def main() -> None:
     root = Path("builder")
@@ -519,6 +549,8 @@ def _compat_headless_app_manager_ui(text):
         raise SystemExit("v3 service: modern AppManager UI wrapper removal is partial")
     return text
 '''
+    service_text += "\nheadless_pipeline_handler = _compat_headless_pipeline_handler\n"
+    service_text += "headless_app_manager_ui = _compat_headless_app_manager_ui\n"
     service_path.write_text(service_text, encoding="utf-8")
 
     integ_path = root / "scripts" / "patch_sidestore_integration.py"
