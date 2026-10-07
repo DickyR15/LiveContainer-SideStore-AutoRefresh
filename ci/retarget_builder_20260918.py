@@ -276,7 +276,7 @@ def replace_once(text, old, new, label):
     return text.replace(old, new, 1)
 
 '''
-        integration.write_text(si, encoding="utf-8")
+    integration.write_text(si, encoding="utf-8")
 
     # Sep-18 FetchProvisioningProfiles already contains the desired parent/extension
     # bundle-ID algorithm. The legacy backport anchor is therefore a no-op.
@@ -307,7 +307,7 @@ def patch_provisioning_profile_requests(text):
     return _v3_original_patch_provisioning_profile_requests(text)
 
 '''
-        combined.write_text(cs, encoding="utf-8")
+    combined.write_text(cs, encoding="utf-8")
 
     s += r'''
     
@@ -326,6 +326,7 @@ def replace(text, old, new):
 
 replace = replace
 '''
+    service.write_text(s, encoding="utf-8")
 
 def main() -> None:
     root = Path("builder")
@@ -619,15 +620,13 @@ replace_once = _v3_replace_once_modern_background
 def main() -> None:
     root = Path("builder")
     changed = replace_builder_pins(root)
+    _v3_modern_source_compat(root)
+    _v3_patch_builder_scripts(root)
     patch_v3_service(root / "scripts/patch_v3_service.py")
     patch_background(root / "scripts/patch_background_automation.py")
     patch_sidestore_integration(root / "scripts/patch_sidestore_integration.py")
-    _v3_modern_source_compat(root)
     print(f"Retargeted {changed} builder files")
     print(f"Selected sources: LiveContainer={LIVE} SideStore={SIDE} minimuxer={MINI} SideSign={SIGN}")
-
-if __name__ == "__main__":
-    main()
 
 if __name__ == "__main__":
     main()
